@@ -4,9 +4,98 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stage Buddy</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
+<!-- Setup Screen -->
+<div id="setup-screen">
     <h1>Stage Buddy</h1>
-    <p>Voice-powered stage design assistant</p>
+    <p class="subtitle">Voice-powered stage design assistant</p>
+
+    <div class="setup-form">
+        <div class="form-group">
+            <label>Show Name</label>
+            <input type="text" id="show-name" placeholder="e.g., Romeo & Juliet">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Width (m)</label>
+                <input type="number" id="stage-width" value="8" step="0.5">
+            </div>
+            <div class="form-group">
+                <label>Depth (m)</label>
+                <input type="number" id="stage-depth" value="6" step="0.5">
+            </div>
+            <div class="form-group">
+                <label>Height (m)</label>
+                <input type="number" id="stage-height" value="4" step="0.5">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Budget (IDR)</label>
+            <input type="number" id="budget" value="25000000" step="1000000">
+        </div>
+
+        <button class="btn-primary" onclick="startSession()">Start Design Session</button>
+    </div>
+</div>
+
+<!-- Session Screen -->
+<div id="session-screen">
+    <div class="main-panels">
+        <!-- Stage View -->
+        <div class="stage-panel">
+            <div class="stage-image-container" id="stage-image-container">
+                <div class="stage-placeholder">
+                    <p>Capture your stage to begin</p>
+                </div>
+            </div>
+            <div class="stage-actions">
+                <button class="btn-capture" onclick="captureStage()">Capture Stage</button>
+            </div>
+        </div>
+
+        <!-- Conversation Panel -->
+        <div class="conversation-panel">
+            <div class="voice-status" id="voice-status">Connecting...</div>
+            <div class="transcript-log" id="transcript-log"></div>
+            <div class="mic-controls">
+                <button class="btn-mic" id="btn-mic" onclick="toggleMic()">Mic</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOM Panel -->
+    <div class="bom-panel">
+        <h3>Bill of Materials</h3>
+        <table class="bom-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Unit</th>
+                    <th>Unit Price</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody id="bom-body">
+                <tr><td colspan="5" style="color:#555; text-align:center;">No items yet — describe your stage to Pak Panggung</td></tr>
+            </tbody>
+        </table>
+        <div class="budget-bar">
+            <div class="budget-track">
+                <div class="budget-fill" id="budget-fill" style="width: 0%"></div>
+            </div>
+            <span class="budget-text" id="budget-text">Rp 0 / Rp 25,000,000</span>
+            <button class="btn-export" onclick="exportBOM()">Export CSV</button>
+        </div>
+    </div>
+</div>
+
+<video id="camera-preview" playsinline></video>
+<script src="/static/app.js"></script>
 </body>
 </html>

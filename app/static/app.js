@@ -1,0 +1,295 @@
+// app.js — Stage Buddy frontend
+
+const state = {
+    ws: null,
+    config: null,
+    audioContext: null,
+    micStream: null,
+    micProcessor: null,
+    isRecording: false,
+    bomItems: [],
+    bomTotal: 0,
+    bomBudget: 0,
+};
+
+// ============ Setup Screen ============
+
+function startSession() {
+    const name = document.getElementById("show-name").value || "Untitled Show";
+    const width = parseFloat(document.getElementById("stage-width").value) || 8;
+    const depth = parseFloat(document.getElementById("stage-depth").value) || 6;
+    const height = parseFloat(document.getElementById("stage-height").value) || 4;
+    const budget = parseInt(document.getElementById("budget").value) || 25000000;
+
+    state.config = { name, width, depth, height, budget };
+
+    document.getElementById("setup-screen").style.display = "none";
+    document.getElementById("session-screen").style.display = "flex";
+
+    connectWebSocket();
+}
+
+// ============ WebSocket ============
+
+function connectWebSocket() {
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${location.host}/ws/session`;
+    state.ws = new WebSocket(wsUrl);
+
+    state.ws.onopen = () => {
+        state.ws.send(JSON.stringify({
+            type: "start_session",
+            config: state.config,
+        }));
+    };
+
+    state.ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        handleServerMessage(msg);
+    };
+
+    state.ws.onclose = () => {
+        updateVoiceStatus("Disconnected");
+    };
+}
+
+function handleServerMessage(msg) {
+    switch (msg.type) {
+        case "session_started":
+            updateVoiceStatus("Ready — tap mic to speak");
+            break;
+        case "audio":
+            playAudioChunk(msg.data);
+            break;
+        case "transcript":
+            addTranscript(msg.role, msg.text);
+            break;
+        case "stage_image":
+            showStageImage(msg.data, msg.mime_type);
+            break;
+        case "bom":
+            updateBOM(msg);
+            break;
+        case "error":
+            addTranscript("assistant", "Error: " + msg.message);
+            break;
+    }
+}
+
+// ============ Audio Capture ============
+
+async function initAudio() {
+    state.audioContext = new AudioContext({ sampleRate: 16000 });
+    state.micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true },
+    });
+}
+
+async function toggleMic() {
+    const btn = document.getElementById("btn-mic");
+
+    if (!state.isRecording) {
+        if (!state.audioContext) await initAudio();
+
+        const source = state.audioContext.createMediaStreamSource(state.micStream);
+        state.micProcessor = state.audioContext.createScriptProcessor(4096, 1, 1);
+
+        state.micProcessor.onaudioprocess = (e) => {
+            if (!state.isRecording || !state.ws) return;
+            const float32 = e.inputBuffer.getChannelData(0);
+            const int16 = float32ToInt16(float32);
+            const b64 = arrayBufferToBase64(int16.buffer);
+            state.ws.send(JSON.stringify({ type: "audio", data: b64 }));
+        };
+
+        source.connect(state.micProcessor);
+        state.micProcessor.connect(state.audioContext.destination);
+
+        state.isRecording = true;
+        btn.classList.add("active");
+        updateVoiceStatus("Listening...");
+    } else {
+        state.isRecording = false;
+        if (state.micProcessor) {
+            state.micProcessor.disconnect();
+            state.micProcessor = null;
+        }
+        btn.classList.remove("active");
+        updateVoiceStatus("Ready — tap mic to speak");
+    }
+}
+
+function float32ToInt16(float32Array) {
+    const int16 = new Int16Array(float32Array.length);
+    for (let i = 0; i < float32Array.length; i++) {
+        const s = Math.max(-1, Math.min(1, float32Array[i]));
+        int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return int16;
+}
+
+// ============ Audio Playback ============
+
+const audioPlaybackQueue = [];
+let isPlaying = false;
+
+async function playAudioChunk(b64Data) {
+    const bytes = base64ToArrayBuffer(b64Data);
+    audioPlaybackQueue.push(bytes);
+    if (!isPlaying) drainAudioQueue();
+}
+
+async function drainAudioQueue() {
+    isPlaying = true;
+    updateVoiceStatus("Pak Panggung is speaking...");
+
+    const ctx = state.audioContext || new AudioContext({ sampleRate: 24000 });
+
+    while (audioPlaybackQueue.length > 0) {
+        const pcmBytes = audioPlaybackQueue.shift();
+        const int16 = new Int16Array(pcmBytes);
+        const float32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) {
+            float32[i] = int16[i] / 0x7fff;
+        }
+        const buffer = ctx.createBuffer(1, float32.length, 24000);
+        buffer.getChannelData(0).set(float32);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+        await new Promise((r) => (source.onended = r));
+    }
+
+    isPlaying = false;
+    updateVoiceStatus("Ready — tap mic to speak");
+}
+
+// ============ Camera ============
+
+async function captureStage() {
+    const video = document.getElementById("camera-preview");
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment", width: 1280, height: 720 },
+        });
+        video.srcObject = stream;
+        await video.play();
+
+        await new Promise((r) => setTimeout(r, 500));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+
+        stream.getTracks().forEach((t) => t.stop());
+        video.srcObject = null;
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+        const b64 = dataUrl.split(",")[1];
+
+        showStageImage(b64, "image/jpeg");
+
+        if (state.ws) {
+            state.ws.send(JSON.stringify({ type: "photo", data: b64 }));
+        }
+
+        addTranscript("user", "[Captured stage photo]");
+    } catch (err) {
+        alert("Camera access denied or not available: " + err.message);
+    }
+}
+
+// ============ UI Updates ============
+
+function updateVoiceStatus(text) {
+    const el = document.getElementById("voice-status");
+    el.textContent = text;
+    el.className = "voice-status";
+    if (text.includes("Listening")) el.classList.add("listening");
+    if (text.includes("speaking")) el.classList.add("speaking");
+}
+
+function addTranscript(role, text) {
+    const log = document.getElementById("transcript-log");
+    const entry = document.createElement("div");
+    entry.className = `transcript-entry ${role}`;
+    entry.textContent = text;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+function showStageImage(b64, mimeType) {
+    const container = document.getElementById("stage-image-container");
+    container.innerHTML = `<img src="data:${mimeType || "image/png"};base64,${b64}" alt="Stage design">`;
+}
+
+function updateBOM(data) {
+    state.bomItems = data.items;
+    state.bomTotal = data.total;
+    state.bomBudget = data.budget;
+
+    const tbody = document.getElementById("bom-body");
+    tbody.innerHTML = "";
+
+    for (const item of data.items) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${item.name}</td>
+            <td class="number">${item.quantity}</td>
+            <td>${item.unit}</td>
+            <td class="number">Rp ${item.unit_price.toLocaleString("id-ID")}</td>
+            <td class="number">Rp ${item.subtotal.toLocaleString("id-ID")}</td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    const pct = Math.min((data.total / data.budget) * 100, 100);
+    const fill = document.getElementById("budget-fill");
+    fill.style.width = pct + "%";
+    fill.className = "budget-fill";
+    if (pct > 90) fill.classList.add("danger");
+    else if (pct > 70) fill.classList.add("warning");
+
+    document.getElementById("budget-text").textContent =
+        `Rp ${data.total.toLocaleString("id-ID")} / Rp ${data.budget.toLocaleString("id-ID")}`;
+}
+
+function exportBOM() {
+    if (state.bomItems.length === 0) return;
+
+    let csv = "Item,Quantity,Unit,Unit Price (Rp),Subtotal (Rp)\n";
+    for (const item of state.bomItems) {
+        csv += `"${item.name}",${item.quantity},"${item.unit}",${item.unit_price},${item.subtotal}\n`;
+    }
+    csv += `\nTotal,,,,${state.bomTotal}\n`;
+    csv += `Budget,,,,${state.bomBudget}\n`;
+    csv += `Remaining,,,,${state.bomBudget - state.bomTotal}\n`;
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "stage-buddy-bom.csv";
+    a.click();
+}
+
+// ============ Utilities ============
+
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
