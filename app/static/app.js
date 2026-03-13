@@ -48,8 +48,15 @@ function connectWebSocket() {
         handleServerMessage(msg);
     };
 
-    state.ws.onclose = () => {
-        updateVoiceStatus("Disconnected");
+    state.ws.onclose = (event) => {
+        updateVoiceStatus("Disconnected — refresh to reconnect");
+        if (!event.wasClean) {
+            addTranscript("assistant", "Connection lost. Please refresh the page to start a new session.");
+        }
+    };
+
+    state.ws.onerror = () => {
+        updateVoiceStatus("Connection error");
     };
 }
 

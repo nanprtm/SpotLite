@@ -49,8 +49,12 @@ async def websocket_session(ws: WebSocket):
             if msg_type == "start_session":
                 config = msg.get("config", {})
                 session = StageSession(config=config, send_to_client=send_to_client)
-                await session.start()
-                await ws.send_json({"type": "session_started"})
+                try:
+                    await session.start()
+                    await ws.send_json({"type": "session_started"})
+                except Exception as e:
+                    await ws.send_json({"type": "error", "message": f"Failed to start session: {str(e)}"})
+                    session = None
 
             elif msg_type == "audio" and session:
                 audio_bytes = base64.b64decode(msg["data"])

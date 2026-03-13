@@ -97,22 +97,29 @@ class StageSession:
         self._receive_task: asyncio.Task | None = None
 
     async def start(self):
-        system_instruction = build_system_instruction(self.config, _materials_summary())
-        live_config = types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
-                )
-            ),
-            system_instruction=system_instruction,
-            tools=TOOLS,
-        )
-        self.session = await _get_client().aio.live.connect(
-            model=LIVE_MODEL,
-            config=live_config,
-        ).__aenter__()
-        self._receive_task = asyncio.create_task(self._receive_loop())
+        try:
+            system_instruction = build_system_instruction(self.config, _materials_summary())
+            live_config = types.LiveConnectConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Aoede")
+                    )
+                ),
+                system_instruction=system_instruction,
+                tools=TOOLS,
+            )
+            self.session = await _get_client().aio.live.connect(
+                model=LIVE_MODEL,
+                config=live_config,
+            ).__aenter__()
+            self._receive_task = asyncio.create_task(self._receive_loop())
+        except Exception as e:
+            await self.send_to_client({
+                "type": "error",
+                "message": f"Failed to start Gemini session: {str(e)}"
+            })
+            raise
 
     async def stop(self):
         if self._receive_task:
@@ -136,28 +143,43 @@ class StageSession:
     async def _receive_loop(self):
         try:
             async for msg in self.session.receive():
-                # Handle audio response
-                if msg.server_content and msg.server_content.model_turn:
-                    for part in msg.server_content.model_turn.parts:
-                        if part.inline_data:
-                            audio_b64 = base64.b64encode(part.inline_data.data).decode()
-                            await self.send_to_client({
-                                "type": "audio",
-                                "data": audio_b64,
-                            })
-                        if part.text:
-                            await self.send_to_client({
-                                "type": "transcript",
-                                "role": "assistant",
-                                "text": part.text,
-                            })
+                try:
+                    # Handle audio response
+                    if msg.server_content and msg.server_content.model_turn:
+                        for part in msg.server_content.model_turn.parts:
+                            if part.inline_data:
+                                audio_b64 = base64.b64encode(part.inline_data.data).decode()
+                                await self.send_to_client({
+                                    "type": "audio",
+                                    "data": audio_b64,
+                                })
+                            if part.text:
+                                await self.send_to_client({
+                                    "type": "transcript",
+                                    "role": "assistant",
+                                    "text": part.text,
+                                })
 
-                # Handle function calls
-                if msg.tool_call:
-                    await self._handle_tool_calls(msg.tool_call)
+                    # Handle function calls
+                    if msg.tool_call:
+                        await self._handle_tool_calls(msg.tool_call)
+
+                except Exception as e:
+                    await self.send_to_client({
+                        "type": "error",
+                        "message": f"Error processing message: {str(e)}"
+                    })
 
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            try:
+                await self.send_to_client({
+                    "type": "error",
+                    "message": f"Session error: {str(e)}"
+                })
+            except Exception:
+                pass
 
     async def _handle_tool_calls(self, tool_call):
         function_responses = []
