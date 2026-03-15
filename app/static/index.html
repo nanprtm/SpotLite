@@ -1,109 +1,113 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stage Buddy</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="bg-base-300 text-base-content min-h-screen">
 
 <!-- Setup Screen -->
-<div id="setup-screen">
-    <h1>Stage Buddy</h1>
-    <p class="subtitle">Voice-powered stage design assistant</p>
+<div id="setup-screen" class="flex flex-col items-center justify-center min-h-screen p-8">
+    <h1 class="text-4xl font-bold text-white mb-1">Stage Buddy</h1>
+    <p class="text-base-content/50 mb-6">Voice-powered stage design assistant</p>
 
-    <div class="setup-form">
-        <div class="form-group">
-            <label>Show Name</label>
-            <input type="text" id="show-name" placeholder="e.g., Romeo & Juliet">
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label>Width (m)</label>
-                <input type="number" id="stage-width" value="8" step="0.5">
+    <div class="card bg-base-200 shadow-xl w-full max-w-md">
+        <div class="card-body gap-4">
+            <div class="form-control">
+                <label class="label"><span class="label-text">Show Name</span></label>
+                <input type="text" id="show-name" placeholder="e.g., Romeo & Juliet" class="input input-bordered w-full">
             </div>
-            <div class="form-group">
-                <label>Depth (m)</label>
-                <input type="number" id="stage-depth" value="6" step="0.5">
-            </div>
-            <div class="form-group">
-                <label>Height (m)</label>
-                <input type="number" id="stage-height" value="4" step="0.5">
-            </div>
-        </div>
 
-        <div class="form-group">
-            <label>Budget (IDR)</label>
-            <input type="number" id="budget" value="25000000" step="1000000">
-        </div>
+            <div class="grid grid-cols-3 gap-3">
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Width (m)</span></label>
+                    <input type="number" id="stage-width" value="8" step="0.5" class="input input-bordered w-full">
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Depth (m)</span></label>
+                    <input type="number" id="stage-depth" value="6" step="0.5" class="input input-bordered w-full">
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text">Height (m)</span></label>
+                    <input type="number" id="stage-height" value="4" step="0.5" class="input input-bordered w-full">
+                </div>
+            </div>
 
-        <button class="btn-primary" onclick="startSession()">Start Design Session</button>
+            <div class="form-control">
+                <label class="label"><span class="label-text">Budget (IDR)</span></label>
+                <input type="number" id="budget" value="25000000" step="1000000" class="input input-bordered w-full">
+            </div>
+
+            <button class="btn btn-primary w-full mt-2" onclick="startSession()">Start Design Session</button>
+        </div>
     </div>
 </div>
 
 <!-- Session Screen -->
-<div id="session-screen">
-    <div class="main-panels">
+<div id="session-screen" class="hidden h-screen flex-col">
+    <div class="flex flex-1 overflow-hidden">
         <!-- Stage View -->
-        <div class="stage-panel">
-            <div class="stage-image-container" id="stage-image-container">
-                <div class="stage-placeholder">
+        <div class="flex-1 flex flex-col p-3 border-r border-base-content/10">
+            <div class="stage-image-container flex-1 flex items-center justify-center bg-base-200 rounded-xl overflow-hidden relative" id="stage-image-container">
+                <div class="text-base-content/30 text-center">
                     <p>Capture your stage to begin</p>
                 </div>
             </div>
-            <div class="image-history" id="image-history"></div>
-            <div class="stage-actions">
-                <button class="btn-capture" onclick="captureStage()">Capture Stage</button>
+            <div class="image-history flex gap-1.5 py-1.5 overflow-x-auto" id="image-history"></div>
+            <div class="flex gap-2 mt-1">
+                <button class="btn btn-outline btn-sm flex-1" onclick="captureStage()">Capture Stage</button>
             </div>
         </div>
 
         <!-- Conversation Panel -->
-        <div class="conversation-panel">
-            <div class="voice-indicator" id="voice-indicator">
-                <div class="waveform-bar"></div>
-                <div class="waveform-bar"></div>
-                <div class="waveform-bar"></div>
-                <div class="waveform-bar"></div>
-                <div class="waveform-bar"></div>
+        <div class="w-[360px] min-w-[300px] flex flex-col p-3 overflow-hidden">
+            <div class="voice-indicator flex items-center justify-center gap-1 h-10 mb-1" id="voice-indicator">
+                <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
+                <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
+                <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
+                <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
+                <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
             </div>
-            <div class="voice-status" id="voice-status">Connecting...</div>
-            <div class="transcript-log" id="transcript-log"></div>
-            <div class="mic-controls">
-                <button class="btn-mic" id="btn-mic" onclick="toggleMic()">Mic</button>
+            <div class="voice-status text-center py-1 text-sm text-base-content/50" id="voice-status">Connecting...</div>
+            <div class="transcript-log flex-1 overflow-y-auto p-2 flex flex-col gap-2" id="transcript-log"></div>
+            <div class="flex justify-center py-2">
+                <button class="btn-mic w-16 h-16 rounded-full border-2 border-base-content/20 bg-base-200 text-white text-2xl cursor-pointer flex items-center justify-center" id="btn-mic" onclick="toggleMic()">Mic</button>
             </div>
         </div>
     </div>
 
     <!-- BOM Panel -->
-    <div class="bom-panel">
-        <h3>Bill of Materials</h3>
-        <table class="bom-table">
-            <thead>
-                <tr>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Unit</th>
-                    <th>Unit Price</th>
-                    <th>Subtotal</th>
-                </tr>
-            </thead>
-            <tbody id="bom-body">
-                <tr><td colspan="5" style="color:#555; text-align:center;">No items yet — describe your stage to Pak Panggung</td></tr>
-            </tbody>
-        </table>
-        <div class="budget-bar">
-            <div class="budget-track">
-                <div class="budget-fill" id="budget-fill" style="width: 0%"></div>
-            </div>
-            <span class="budget-text" id="budget-text">Rp 0 / Rp 25,000,000</span>
-            <button class="btn-export" onclick="exportBOM()">Export CSV</button>
+    <div class="border-t border-base-content/10 p-3 max-h-[35vh] overflow-y-auto">
+        <h3 class="font-semibold text-sm mb-2">Bill of Materials</h3>
+        <div class="overflow-x-auto">
+            <table class="table table-xs table-zebra">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Qty</th>
+                        <th>Unit</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody id="bom-body">
+                    <tr><td colspan="5" class="text-center text-base-content/30">No items yet — describe your stage to Teman Panggung</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="flex items-center gap-3 mt-3">
+            <progress class="progress w-full" id="budget-progress" value="0" max="100"></progress>
+            <span class="text-xs text-base-content/60 whitespace-nowrap" id="budget-text">Rp 0 / Rp 25,000,000</span>
+            <button class="btn btn-outline btn-xs" onclick="exportBOM()">Export CSV</button>
         </div>
     </div>
 </div>
 
-<video id="camera-preview" playsinline></video>
+<video id="camera-preview" playsinline class="hidden"></video>
 <script src="/static/app.js"></script>
 </body>
 </html>

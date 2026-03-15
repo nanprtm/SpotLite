@@ -424,11 +424,12 @@ function updateBOM(data) {
     }
 
     const pct = Math.min((state.bomTotal / state.bomBudget) * 100, 100);
-    const fill = document.getElementById("budget-fill");
-    fill.style.width = pct + "%";
-    fill.className = "budget-fill";
-    if (pct > 90) fill.classList.add("danger");
-    else if (pct > 70) fill.classList.add("warning");
+    const progress = document.getElementById("budget-progress");
+    progress.value = pct;
+    progress.className = "progress w-full";
+    if (pct > 90) progress.classList.add("progress-error");
+    else if (pct > 70) progress.classList.add("progress-warning");
+    else progress.classList.add("progress-success");
 
     document.getElementById("budget-text").textContent =
         `Rp ${state.bomTotal.toLocaleString("id-ID")} / Rp ${state.bomBudget.toLocaleString("id-ID")}`;
