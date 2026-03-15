@@ -237,8 +237,9 @@ async def _route_event(ws: WebSocket, event, user_id: str, session_id: str):
             audio_b64 = base64.b64encode(part.inline_data.data).decode()
             await ws.send_json({"type": "audio", "data": audio_b64})
 
-        # Text response (assistant)
-        elif part.text and event.author != "user":
+        # Text response — only show if NOT from the live audio model
+        # (output_transcription already handles the text version of audio)
+        elif part.text and event.author not in ("user", "spotlite"):
             await ws.send_json({
                 "type": "transcript",
                 "role": "assistant",
