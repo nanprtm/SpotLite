@@ -4,11 +4,19 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import uuid
 import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv
+load_dotenv()
+
+# Ensure Vertex AI env vars are set before ADK imports
+# (Cloud Run sets these, but ADK reads them at import time)
+if os.getenv("GOOGLE_CLOUD_PROJECT") and not os.getenv("GOOGLE_GENAI_USE_VERTEXAI"):
+    os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "TRUE"
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,14 +26,16 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-load_dotenv()
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(name)s %(levelname)s %(message)s",
 )
 logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+
+logger.info("GOOGLE_GENAI_USE_VERTEXAI=%s", os.getenv("GOOGLE_GENAI_USE_VERTEXAI"))
+logger.info("GOOGLE_CLOUD_PROJECT=%s", os.getenv("GOOGLE_CLOUD_PROJECT"))
+logger.info("GOOGLE_CLOUD_LOCATION=%s", os.getenv("GOOGLE_CLOUD_LOCATION"))
 
 from app.agent import root_agent, _load_base_stage, _materials_summary
 from app.prices import generate_bom, load_materials
