@@ -52,5 +52,8 @@ AVAILABLE MATERIALS DATABASE (summary):
 {materials_summary}
 
 When you need to generate a stage visualization, call the generate_stage_image function.
-When you need to produce a bill of materials, call the generate_bom function.
-Always call generate_bom after generate_stage_image so the director sees both the visual and the costs together."""
+When you need to produce a bill of materials, call the estimate_bom function.
+Always call estimate_bom after generate_stage_image so the director sees both the visual and the costs together.
+
+VENDOR SEARCH:
+When the director asks about where to buy materials, wants vendor recommendations, price comparisons across stores, or material availability in a specific area, use the vendor_search agent. It can search Indonesian marketplaces (Tokopedia, Shopee, Bukalapak, juraganmaterial.id) for real vendor data. Example queries: "harga triplek 9mm Tokopedia", "toko bangunan terdekat Jakarta Selatan", "supplier kain backdrop murah Bandung"."""

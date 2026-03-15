@@ -376,6 +376,162 @@ body {
     font-size: 0.8rem;
 }
 
+/* Camera preview pip */
 #camera-preview {
     display: none;
+}
+
+#camera-preview.pip-visible {
+    display: block;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    width: 160px;
+    height: 90px;
+    border-radius: 8px;
+    border: 2px solid #4285f4;
+    object-fit: cover;
+    z-index: 100;
+    opacity: 0.85;
+}
+
+/* User transcript — partial (in-progress) */
+.transcript-entry.user.partial {
+    opacity: 0.6;
+    font-style: italic;
+}
+
+/* Image history strip */
+.image-history {
+    display: flex;
+    gap: 6px;
+    padding: 6px 0;
+    overflow-x: auto;
+    min-height: 0;
+}
+
+.image-history:empty {
+    display: none;
+}
+
+.image-history img {
+    height: 56px;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    object-fit: cover;
+    transition: border-color 0.2s;
+    flex-shrink: 0;
+}
+
+.image-history img:hover {
+    border-color: #4285f4;
+}
+
+/* Fullsize overlay for design history */
+.image-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.overlay-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.overlay-content img {
+    max-width: 90vw;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.overlay-label {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+.overlay-close {
+    padding: 0.5rem 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #555;
+    background: #2a2a2a;
+    color: #fff;
+    cursor: pointer;
+}
+
+/* Vendor results card */
+.vendor-card {
+    background: #1a2a1a !important;
+    border-left: 3px solid #34a853;
+    max-width: 100% !important;
+}
+
+.vendor-card strong {
+    color: #34a853;
+    display: block;
+    margin-bottom: 0.3rem;
+}
+
+.vendor-card p {
+    color: #ccc;
+    font-size: 0.85rem;
+    margin-bottom: 0.3rem;
+    white-space: pre-wrap;
+}
+
+.vendor-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+}
+
+.vendor-sources a {
+    color: #4285f4;
+    font-size: 0.8rem;
+    text-decoration: none;
+}
+
+.vendor-sources a:hover {
+    text-decoration: underline;
+}
+
+/* Loading state for image generation */
+.stage-image-container.loading::after {
+    content: "Generating...";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    color: #4285f4;
+    font-size: 1.2rem;
+    animation: pulse-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-loading {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* BOM row fade-in */
+.bom-row-enter {
+    animation: bom-fade-in 0.3s ease-out;
+}
+
+@keyframes bom-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
 }

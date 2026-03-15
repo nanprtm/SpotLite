@@ -11,7 +11,13 @@ const state = {
     bomItems: [],
     bomTotal: 0,
     bomBudget: 0,
+    imageHistory: [],
+    cameraStream: null,
+    cameraInterval: null,
 };
+
+// In-progress user transcript element
+let _pendingUserTranscript = null;
 
 // ============ Setup Screen ============
 
@@ -56,6 +62,7 @@ function connectWebSocket() {
 
     state.ws.onclose = (event) => {
         updateVoiceStatus("Disconnected — refresh to reconnect");
+        stopPeriodicCapture();
         if (!event.wasClean) {
             addTranscript("assistant", "Connection lost. Please refresh the page to start a new session.");
         }
@@ -78,16 +85,71 @@ function handleServerMessage(msg) {
         case "transcript":
             addTranscript(msg.role, msg.text);
             break;
+        case "user_transcript":
+            handleUserTranscript(msg.text, msg.finished);
+            break;
         case "stage_image":
             showStageImage(msg.data, msg.mime_type);
             break;
         case "bom":
             updateBOM(msg);
             break;
+        case "vendor_results":
+            showVendorResults(msg);
+            break;
         case "error":
             addTranscript("assistant", "Error: " + msg.message);
             break;
     }
+}
+
+// ============ User Transcription ============
+
+function handleUserTranscript(text, finished) {
+    const log = document.getElementById("transcript-log");
+
+    if (!finished) {
+        // Update in-progress element
+        if (!_pendingUserTranscript) {
+            _pendingUserTranscript = document.createElement("div");
+            _pendingUserTranscript.className = "transcript-entry user partial";
+            log.appendChild(_pendingUserTranscript);
+        }
+        _pendingUserTranscript.textContent = text;
+    } else {
+        // Finalize
+        if (_pendingUserTranscript) {
+            _pendingUserTranscript.textContent = text;
+            _pendingUserTranscript.classList.remove("partial");
+            _pendingUserTranscript = null;
+        } else {
+            addTranscript("user", text);
+        }
+    }
+    log.scrollTop = log.scrollHeight;
+}
+
+// ============ Vendor Results ============
+
+function showVendorResults(msg) {
+    const log = document.getElementById("transcript-log");
+    const card = document.createElement("div");
+    card.className = "transcript-entry vendor-card";
+
+    let html = `<strong>Vendor Search: ${msg.query || ""}</strong>`;
+    html += `<p>${msg.text || "No results found."}</p>`;
+
+    if (msg.sources && msg.sources.length > 0) {
+        html += '<div class="vendor-sources">';
+        for (const src of msg.sources) {
+            html += `<a href="${src.url}" target="_blank" rel="noopener">${src.title || src.url}</a>`;
+        }
+        html += "</div>";
+    }
+
+    card.innerHTML = html;
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
 }
 
 // ============ Audio Capture ============
@@ -123,7 +185,6 @@ async function toggleMic() {
         btn.classList.add("active");
         updateVoiceStatus("Listening...");
     } else {
-        // Mute — stop sending audio but keep everything alive
         state.isRecording = false;
         if (state.micProcessor) {
             state.micProcessor.disconnect();
@@ -169,14 +230,12 @@ function playAudioChunk(b64Data) {
     source.buffer = buffer;
     source.connect(ctx.destination);
 
-    // Schedule gapless: each chunk starts exactly where the previous one ends
     const now = ctx.currentTime;
     if (nextPlayTime < now) {
         nextPlayTime = now;
     }
     source.start(nextPlayTime);
 
-    // Show speaking status on first chunk
     if (nextPlayTime <= now) {
         if (state.isRecording) {
             updateVoiceStatus("Teman Panggung is speaking... (listening)");
@@ -187,7 +246,6 @@ function playAudioChunk(b64Data) {
 
     nextPlayTime += buffer.duration;
 
-    // Reset status after the last scheduled chunk finishes
     clearTimeout(playbackEndTimer);
     const remaining = nextPlayTime - ctx.currentTime;
     playbackEndTimer = setTimeout(() => {
@@ -212,27 +270,54 @@ async function captureStage() {
 
         await new Promise((r) => setTimeout(r, 500));
 
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext("2d").drawImage(video, 0, 0);
-
-        stream.getTracks().forEach((t) => t.stop());
-        video.srcObject = null;
-
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
-        const b64 = dataUrl.split(",")[1];
-
+        const b64 = captureFrame(video);
         showStageImage(b64, "image/jpeg");
 
         if (state.ws) {
             state.ws.send(JSON.stringify({ type: "photo", data: b64 }));
         }
 
-        addTranscript("user", "[Captured stage photo]");
+        // Keep stream alive for periodic captures
+        state.cameraStream = stream;
+        video.classList.add("pip-visible");
+        startPeriodicCapture(video);
+
+        addTranscript("user", "[Captured stage photo — live vision active]");
     } catch (err) {
         alert("Camera access denied or not available: " + err.message);
     }
+}
+
+function captureFrame(video) {
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    return canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+}
+
+function startPeriodicCapture(video) {
+    stopPeriodicCapture();
+    state.cameraInterval = setInterval(() => {
+        if (!state.ws || state.ws.readyState !== 1) return;
+        if (!video.srcObject) return;
+        const b64 = captureFrame(video);
+        state.ws.send(JSON.stringify({ type: "photo", data: b64 }));
+    }, 10000);
+}
+
+function stopPeriodicCapture() {
+    if (state.cameraInterval) {
+        clearInterval(state.cameraInterval);
+        state.cameraInterval = null;
+    }
+    if (state.cameraStream) {
+        state.cameraStream.getTracks().forEach((t) => t.stop());
+        state.cameraStream = null;
+    }
+    const video = document.getElementById("camera-preview");
+    video.srcObject = null;
+    video.classList.remove("pip-visible");
 }
 
 // ============ UI Updates ============
@@ -269,11 +354,50 @@ function showBaseStagePlaceholder() {
 
 function showStageImage(b64, mimeType) {
     const container = document.getElementById("stage-image-container");
+
+    // Save previous image to history
+    const currentImg = container.querySelector("img");
+    if (currentImg && currentImg.src.startsWith("data:")) {
+        state.imageHistory.push(currentImg.src);
+        renderImageHistory();
+    }
+
+    // Remove loading state
+    container.classList.remove("loading");
+
+    // Show new image
     container.innerHTML = `<img src="data:${mimeType || "image/png"};base64,${b64}" alt="Stage design">`;
 }
 
+function renderImageHistory() {
+    const strip = document.getElementById("image-history");
+    if (!strip) return;
+    strip.innerHTML = "";
+    state.imageHistory.forEach((src, i) => {
+        const thumb = document.createElement("img");
+        thumb.src = src;
+        thumb.alt = `Design ${i + 1}`;
+        thumb.title = `Design ${i + 1} — click to view`;
+        thumb.onclick = () => showFullSizeOverlay(src, i + 1);
+        strip.appendChild(thumb);
+    });
+}
+
+function showFullSizeOverlay(src, num) {
+    const overlay = document.createElement("div");
+    overlay.className = "image-overlay";
+    overlay.innerHTML = `
+        <div class="overlay-content">
+            <span class="overlay-label">Design ${num}</span>
+            <img src="${src}" alt="Design ${num}">
+            <button class="overlay-close" onclick="this.closest('.image-overlay').remove()">Close</button>
+        </div>
+    `;
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+}
+
 function updateBOM(data) {
-    console.log("updateBOM called:", data);
     state.bomItems = data.items || [];
     state.bomTotal = data.total || 0;
     state.bomBudget = data.budget || state.config.budget;
@@ -288,6 +412,7 @@ function updateBOM(data) {
 
     for (const item of state.bomItems) {
         const tr = document.createElement("tr");
+        tr.className = "bom-row-enter";
         tr.innerHTML = `
             <td>${item.name}</td>
             <td class="number">${item.quantity}</td>
