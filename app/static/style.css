@@ -1,10 +1,8 @@
 /* SpotLite — custom theme + styles */
 
-@plugin "daisyui/theme" {
-  name: "blessedloop";
-  default: false;
-  prefersdark: false;
-  color-scheme: "light";
+/* Custom DaisyUI v5 theme (CDN-compatible via CSS variables) */
+[data-theme="blessedloop"] {
+  color-scheme: light;
   --color-base-100: #f4f7f6;
   --color-base-200: oklch(90% 0.058 230.902);
   --color-base-300: oklch(95% 0.037 318.852);
@@ -44,23 +42,44 @@
 
 /* Mic button active state */
 .btn-mic.active {
-    background: #ea4335;
-    border-color: #ea4335;
+    background: var(--color-error);
+    border-color: var(--color-error);
+    color: var(--color-error-content);
     animation: mic-pulse 1.5s ease-in-out infinite;
 }
 
 @keyframes mic-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.4); }
-    50% { box-shadow: 0 0 0 12px rgba(234, 67, 53, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-error) 40%, transparent); }
+    50% { box-shadow: 0 0 0 12px transparent; }
 }
 
 /* Voice status colors */
-.voice-status.listening { color: #ea4335; }
-.voice-status.speaking { color: #4285f4; }
+.voice-status.listening { color: var(--color-error); }
+.voice-status.speaking { color: var(--color-secondary); }
 
-/* Waveform animations — Listening (red) */
+/* Waveform bars — force horizontal layout */
+.voice-indicator {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px;
+    height: 40px;
+}
+
+.waveform-bar {
+    width: 4px;
+    min-width: 4px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--color-base-content, #999);
+    transition: background 0.3s;
+    flex-shrink: 0;
+}
+
+/* Waveform animations — Listening */
 .voice-indicator.listening .waveform-bar {
-    background: #ea4335;
+    background: var(--color-error);
     animation: wave-listen 0.8s ease-in-out infinite alternate;
 }
 .voice-indicator.listening .waveform-bar:nth-child(1) { animation-delay: 0s; }
@@ -74,9 +93,9 @@
     100% { height: 20px; }
 }
 
-/* Waveform animations — Speaking (blue) */
+/* Waveform animations — Speaking */
 .voice-indicator.speaking .waveform-bar {
-    background: #4285f4;
+    background: var(--color-secondary);
     animation: wave-speak 0.6s ease-in-out infinite alternate;
 }
 .voice-indicator.speaking .waveform-bar:nth-child(1) { animation-delay: 0s; }
@@ -101,12 +120,12 @@
 }
 
 .transcript-entry.user {
-    background: oklch(var(--p) / 0.2);
+    background: color-mix(in oklch, var(--color-primary) 20%, transparent);
     align-self: flex-end;
 }
 
 .transcript-entry.assistant {
-    background: oklch(var(--b2));
+    background: var(--color-base-200);
     align-self: flex-start;
 }
 
@@ -129,7 +148,7 @@
 }
 
 .image-history img:hover {
-    border-color: oklch(var(--p));
+    border-color: var(--color-primary);
 }
 
 /* Fullsize overlay */
@@ -161,13 +180,13 @@
 
 /* Vendor results card */
 .vendor-card {
-    background: oklch(var(--su) / 0.1) !important;
-    border-left: 3px solid oklch(var(--su));
+    background: color-mix(in oklch, var(--color-success) 10%, transparent) !important;
+    border-left: 3px solid var(--color-success);
     max-width: 100% !important;
 }
 
 .vendor-card strong {
-    color: oklch(var(--su));
+    color: var(--color-success);
     display: block;
     margin-bottom: 0.25rem;
 }
@@ -186,7 +205,7 @@
 }
 
 .vendor-sources a {
-    color: oklch(var(--p));
+    color: var(--color-primary);
     font-size: 0.8rem;
     text-decoration: none;
 }
@@ -201,8 +220,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
-    color: oklch(var(--p));
+    background: rgba(0, 0, 0, 0.5);
+    color: var(--color-primary);
     font-size: 1.2rem;
     animation: pulse-loading 1.5s ease-in-out infinite;
 }
@@ -231,7 +250,7 @@
     width: 160px;
     height: 90px;
     border-radius: 0.5rem;
-    border: 2px solid oklch(var(--p));
+    border: 2px solid var(--color-primary);
     object-fit: cover;
     z-index: 100;
     opacity: 0.85;
