@@ -1,80 +1,91 @@
-# Stage Buddy
+# SpotLite
 
 **Voice-powered stage design assistant for Indonesian theater**
 
-Stage Buddy is a web application that helps theater directors design stage sets through real-time voice conversation with an AI set designer. Directors describe their vision aloud and receive AI-generated mockup images along with an itemized bill of materials using real Indonesian building material prices — all within a specified budget.
+SpotLite is a web application that helps theater directors design stage sets through real-time voice conversation with an AI set designer. Directors describe their vision aloud and receive AI-generated mockup images, an itemized bill of materials with real Indonesian prices, automated vendor sourcing, and nearby thrift store suggestions — all within a specified budget.
 
 ---
 
 ## Problem Statement
 
-Musical theater in Indonesia faces a massive disconnect between production costs and market demand. Student communities and indie productions often go bankrupt ("boncos") because the vendor ecosystem is monopolized by high-priced concert prop makers. Directors lack tools to plan sets within budget and have no data to negotiate fair prices with vendors. There is no accessible way to visualize a design, estimate costs, and iterate on both simultaneously.
+Musical theater in Indonesia faces a massive disconnect between production costs and market demand. Student communities and indie productions often go bankrupt ("boncos") because the vendor ecosystem is monopolized by high-priced concert prop makers. Directors lack tools to plan sets within budget and have no data to negotiate fair prices with vendors. There is no accessible way to visualize a design, estimate costs, and source materials simultaneously.
 
 ## Solution
 
-Stage Buddy is a web app where theater directors have a real-time voice conversation with Gemini to design their set within a budget. The AI persona "Teman Panggung" (Stage Buddy) acts as an energetic, creative set designer who understands local materials, costs, and creative workarounds. Gemini generates updated stage mockup images and an itemized bill of materials with real Indonesian material prices sourced from juraganmaterial.id. Directors can iterate conversationally — asking to make things cheaper, swap materials, or redesign sections — and see both the visual and cost impact in real time.
+SpotLite is a web app where theater directors have a real-time voice conversation with Gemini to design their set within a budget. The AI persona "SpotLite" acts as an energetic, creative set designer who understands local materials, costs, and creative workarounds. Gemini generates updated stage mockup images, an itemized bill of materials with real Indonesian material prices, and automatically searches for vendors on Tokopedia, Shopee, and Bukalapak. It also finds nearby thrift/junkyard stores for cheaper secondhand materials. Directors can iterate conversationally — asking to make things cheaper, swap materials, or redesign sections — and see both the visual and cost impact in real time.
 
 ---
 
 ## Architecture
 
 ```
-+---------------------------------------------------+
-|                    Browser                         |
-|  Camera + Mic -> WebSocket -> Stage View + BOM    |
-+------------------------+--------------------------+
-                         | WebSocket (audio, photos, results)
-+------------------------v--------------------------+
-|            FastAPI Backend (Cloud Run)              |
-|                                                    |
-|  Gemini Live API <-> Session Manager               |
-|        | function calls                            |
-|  Image Generation (Gemini) + BOM Generator         |
-|        |                                           |
-|  Price Database (pre-scraped from                  |
-|  juraganmaterial.id)                               |
-+----------------------------------------------------+
++--------------------------------------------------------------+
+|                         Browser                               |
+|  Camera + Mic + Geolocation → WebSocket → Bento Grid UI      |
+|  [Stage Image] [BOM Table] [Vendor Panel] [Chat]             |
++-----------------------------+--------------------------------+
+                              | WebSocket (audio, photos, results)
++-----------------------------v--------------------------------+
+|              FastAPI Backend (Cloud Run)                       |
+|                                                               |
+|  ADK Runner ↔ Gemini Live API (voice streaming)               |
+|        | function calls                                       |
+|  ┌─────┴──────────────────────────────┐                       |
+|  │ generate_stage_image               │ Background async      |
+|  │ estimate_bom → auto vendor search  │ Sequential + delayed  |
+|  │ search_vendors (Google Search)     │ Grounding API         |
+|  │ thrift store search                │ Location-aware        |
+|  └────────────────────────────────────┘                       |
+|  Price Database (58 items from juraganmaterial.id)             |
++---------------------------------------------------------------+
 ```
 
 **Key technical details:**
 
-- **Live API model:** `gemini-live-2.5-flash-native-audio` (GA) for real-time voice streaming
+- **Framework:** Google ADK (Agent Development Kit) with Runner, InMemorySessionService, LiveRequestQueue
+- **Live API model:** `gemini-live-2.5-flash-native-audio` for real-time voice streaming
 - **Image model:** `gemini-2.5-flash-image` with 16:9 aspect ratio
-- **Auth:** Vertex AI with Google Cloud credentials (not API key)
-- **Session management:** Live API sessions naturally end after each turn. Context is preserved via conversation history and injected into the system instruction on reconnect, providing seamless continuity.
-- **Image generation:** Runs in background to avoid blocking the Live session. Includes retry with backoff on rate limits and a queue guard to prevent duplicate generations.
-- **Audio playback:** Gapless scheduling via Web Audio API `source.start(nextPlayTime)` for smooth voice output.
+- **Vendor search model:** `gemini-2.5-flash` with Google Search grounding
+- **Auth:** Vertex AI with Google Cloud Application Default Credentials
+- **Session management:** ADK SessionResumptionConfig handles automatic reconnection
+- **Image generation:** Runs as background async task to avoid blocking the Live session. Includes retry with exponential backoff on rate limits.
+- **Vendor auto-trigger:** After BOM generation, automatically searches vendors for top 3 most expensive items (sequential with delays to avoid rate limits)
+- **Thrift store search:** Location-aware search for nearby junkyard/secondhand stores
+- **Audio playback:** Gapless scheduling via Web Audio API `source.start(nextPlayTime)`
 
 **Data flow:**
 
-1. The director opens the app, enters show details (name, stage dimensions, budget), and starts a session.
-2. A WebSocket connection is established to the FastAPI backend.
-3. A placeholder stage image is displayed. The director can optionally capture their real stage via camera.
+1. Director opens the app, enters show details (name, stage dimensions, budget, city/region), and starts a session.
+2. A WebSocket connection is established to the FastAPI backend. Browser geolocation auto-detects the city.
+3. A placeholder stage image is displayed. The director can capture their real stage via camera.
 4. The director taps the mic and describes what they want on stage.
-5. Teman Panggung repeats back the request to confirm alignment, then generates the visualization.
+5. SpotLite generates the visualization when the request is clear, or asks clarifying questions if vague.
 6. Gemini triggers function calls:
-   - `generate_stage_image` — calls the Gemini image model to produce a stage mockup based on the placeholder or captured stage photo.
-   - `generate_bom` — matches requested materials against the price database using fuzzy matching and returns an itemized cost breakdown with dimension-aware quantity estimates.
-7. Results (audio response, generated images, BOM data) are streamed back to the browser.
-8. The frontend renders the stage mockup, updates the BOM table, and shows budget utilization on a progress bar.
+   - `generate_stage_image` — background async task, calls Gemini image model
+   - `estimate_bom` — matches materials via fuzzy matching, auto-corrects quantities based on stage dimensions
+7. After BOM generation, vendor searches auto-trigger in the background:
+   - Top 3 items by cost → searched on Tokopedia, Shopee, Bukalapak
+   - Thrift/junkyard stores near the director's city
+8. Results stream to the browser in real-time: audio, images, BOM table, vendor cards, thrift stores.
 
 ---
 
 ## Features
 
-- Real-time voice conversation with "Teman Panggung" (AI set designer persona)
+- Real-time voice conversation with SpotLite (AI set designer persona)
 - AI-generated stage mockup images (16:9, based on placeholder or captured stage photo)
 - Budget-aware bill of materials with real Indonesian material prices
-- Dimension-aware quantity estimation (calculates material needs based on actual stage size)
+- Dimension-aware quantity auto-correction (calculates needs based on actual stage size)
 - Fuzzy material matching against a 58-item price database
-- Budget tracking with visual progress bar (color-coded warnings)
+- **Auto-triggered vendor sourcing** for top 3 BOM items (Tokopedia, Shopee, Bukalapak)
+- **Location-aware thrift store search** for cheaper secondhand materials
+- **Browser geolocation** with auto-detected city (editable by user)
+- Budget tracking with color-coded progress bar
+- Bento grid layout: stage image, BOM table, vendor panel, chat — all visible at once
 - CSV export for the bill of materials
 - Conversational iteration ("make it cheaper", "replace the backdrop", "use bamboo instead")
-- Confirm-before-generate interaction flow (agent repeats back the request before generating)
-- Image generation queue guard (prevents duplicate/overlapping generations)
-- Session continuity across Live API reconnects via conversation history
 - Gapless audio playback for smooth voice output
-- Debug conversation logs in `logs/` directory
+- Live camera feed with periodic stage photo updates
 
 ---
 
@@ -83,9 +94,10 @@ Stage Buddy is a web app where theater directors have a real-time voice conversa
 | Layer      | Technology                                                        |
 |------------|-------------------------------------------------------------------|
 | Backend    | Python 3.11+, FastAPI, uvicorn                                    |
-| AI         | Google GenAI SDK, Gemini Live API (native audio), Gemini Image Generation |
+| AI Framework | Google ADK (Agent Development Kit)                              |
+| AI Models  | Gemini Live API (native audio), Gemini Image Generation, Gemini Flash (search grounding) |
 | Auth       | Vertex AI with Google Cloud Application Default Credentials       |
-| Frontend   | Vanilla HTML, JavaScript, CSS (no frameworks)                     |
+| Frontend   | Vanilla HTML/JS, Tailwind CSS v4, DaisyUI v5                     |
 | Data       | Pre-scraped material prices from juraganmaterial.id (58 items)    |
 | Deployment | Docker, Google Cloud Run                                          |
 
@@ -104,7 +116,7 @@ Stage Buddy is a web app where theater directors have a real-time voice conversa
 ```bash
 # Clone the repo
 git clone <repo-url>
-cd stage-buddy
+cd spotlite
 
 # Create virtual environment
 python -m venv venv
@@ -131,13 +143,14 @@ uvicorn app.main:app --reload --port 8080
 
 ### Usage
 
-1. Enter your show name, stage dimensions, and budget on the setup screen.
-2. Click "Start Design Session" to connect to the AI.
-3. A placeholder stage image is shown. Optionally use "Capture Stage" to photograph your real stage.
-4. Tap the Mic button and describe what you want on stage.
-5. Teman Panggung will repeat your request for confirmation, then generate a stage mockup and bill of materials.
-6. Iterate by asking for changes — the image and BOM update in real time.
-7. Export the final BOM as a CSV file.
+1. Enter your show name, stage dimensions, budget, and city/region on the setup screen.
+2. Click "Start Design Session" to connect to SpotLite.
+3. A placeholder stage image is shown. Optionally use the camera button to photograph your real stage.
+4. Tap the mic button and describe what you want on stage.
+5. SpotLite generates a stage mockup and bill of materials.
+6. Vendor results and thrift store suggestions appear automatically in the vendor panel.
+7. Iterate by asking for changes — the image, BOM, and vendors update accordingly.
+8. Export the final BOM as a CSV file.
 
 ---
 
@@ -148,7 +161,7 @@ export GCP_PROJECT_ID=your-project-id
 ./deploy.sh
 ```
 
-The deploy script builds a Docker container, pushes it to Google Container Registry, and deploys to Cloud Run. The service is configured with 512Mi memory and a 300-second timeout to accommodate long voice sessions.
+The deploy script builds a Docker container, pushes it to Google Container Registry, and deploys to Cloud Run with 1Gi memory, 900-second timeout, and session affinity for WebSocket support.
 
 ---
 
@@ -157,7 +170,6 @@ The deploy script builds a Docker container, pushes it to Google Container Regis
 - **Source:** juraganmaterial.id (Indonesian building materials marketplace)
 - **Coverage:** 58 items across 10 categories: wood, piping, paint, fabric, fasteners, metal, foam, covering, lighting, tools
 - **Storage:** Pre-scraped and stored in `data/materials.json`
-- **Scraping script:** `scripts/scrape_prices.py`
 - **Matching:** Fuzzy string matching (using Python `difflib.SequenceMatcher`) allows Gemini to request materials by approximate name and still get accurate price lookups
 
 ---
@@ -165,24 +177,20 @@ The deploy script builds a Docker container, pushes it to Google Container Regis
 ## Project Structure
 
 ```
-stage-buddy/
+spotlite/
   app/
-    main.py              # FastAPI app, WebSocket endpoint, routes
-    gemini_session.py    # Gemini Live session manager with function calling
-    prompts.py           # System prompt for the Teman Panggung persona
+    agent.py             # ADK agent definition, tools, background tasks
+    main.py              # FastAPI app, WebSocket endpoint, ADK runner
+    prompts.py           # System prompt for SpotLite persona
     prices.py            # Price database loader and BOM generator
     static/
-      index.html         # Single-page frontend
-      app.js             # WebSocket client, audio capture/playback, UI logic
-      style.css          # Styles
+      index.html         # Single-page frontend (bento grid layout)
+      app.js             # WebSocket client, audio, camera, vendor panel
+      style.css          # Tailwind/DaisyUI custom theme and styles
       stage.png          # Placeholder empty stage image
+      logo.png           # SpotLite logo
   data/
     materials.json       # Pre-scraped material prices (58 items)
-  logs/                  # Debug conversation logs (gitignored)
-  scripts/
-    scrape_prices.py     # Price scraping/population script
-  tests/
-    test_prices.py       # Unit tests for price matching and BOM generation
   Dockerfile             # Container build for Cloud Run
   deploy.sh              # One-command Cloud Run deployment
   requirements.txt       # Python dependencies
