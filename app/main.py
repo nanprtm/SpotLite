@@ -1,4 +1,4 @@
-"""FastAPI application for Stage Buddy using ADK Live API."""
+"""FastAPI application for SpotLite using ADK Live API."""
 
 import asyncio
 import base64
@@ -33,9 +33,9 @@ from app.prompts import build_system_instruction
 
 # ── App Initialization ──────────────────────────────────────────
 
-APP_NAME = "stage-buddy"
+APP_NAME = "spotlite"
 
-app = FastAPI(title="Stage Buddy")
+app = FastAPI(title="SpotLite")
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

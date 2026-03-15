@@ -1,4 +1,4 @@
-// app.js — Stage Buddy frontend
+// app.js — SpotLite frontend
 
 const state = {
     ws: null,
@@ -449,7 +449,7 @@ function exportBOM() {
     const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "stage-buddy-bom.csv";
+    a.download = "spotlite-bom.csv";
     a.click();
 }
 

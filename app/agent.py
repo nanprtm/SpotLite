@@ -1,4 +1,4 @@
-"""ADK Agent definition for Stage Buddy — Teman Panggung."""
+"""ADK Agent definition for SpotLite — Teman Panggung."""
 
 import asyncio
 import base64
