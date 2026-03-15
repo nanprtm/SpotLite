@@ -16,7 +16,7 @@ from app.prompts import build_system_instruction
 logger = logging.getLogger(__name__)
 
 LIVE_MODEL = "gemini-live-2.5-flash-native-audio"
-IMAGE_MODEL = "gemini-3.1-flash-image"
+IMAGE_MODEL = "gemini-2.5-flash-image"
 
 
 def _materials_summary() -> str:
