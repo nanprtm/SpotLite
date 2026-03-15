@@ -42,6 +42,11 @@
                 <input type="number" id="budget" value="25000000" step="1000000" class="input input-bordered w-full">
             </div>
 
+            <div class="form-control">
+                <label class="label"><span class="label-text">City / Region</span></label>
+                <input type="text" id="location" placeholder="Detecting location..." class="input input-bordered w-full">
+            </div>
+
             <button class="btn btn-primary w-full mt-2" onclick="startSession()">Start Design Session</button>
         </div>
     </div>
@@ -64,29 +69,38 @@
             <div class="image-history flex flex-col gap-2 overflow-y-auto" id="image-history"></div>
         </div>
 
-        <!-- BOM Table (fixed height, scrollable) -->
-        <div class="h-[35vh] shrink-0 bg-base-200 rounded-2xl p-3 flex flex-col overflow-hidden">
-            <h3 class="font-semibold text-sm mb-2">Bill of Materials</h3>
-            <div class="flex-1 overflow-y-auto">
-                <table class="table table-xs table-zebra">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th>Qty</th>
-                            <th>Unit</th>
-                            <th class="text-right">Unit Price</th>
-                            <th class="text-right">Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody id="bom-body">
-                        <tr><td colspan="5" class="text-center text-base-content/30">No items yet — describe your stage to SpotLite</td></tr>
-                    </tbody>
-                </table>
+        <!-- Bottom row: BOM + Vendors side by side -->
+        <div class="h-[35vh] shrink-0 grid grid-cols-[1.2fr_1fr] gap-3">
+            <!-- BOM Table -->
+            <div class="bg-base-200 rounded-2xl p-3 flex flex-col overflow-hidden">
+                <div class="flex-1 overflow-y-auto">
+                    <table class="table table-xs table-zebra">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Qty</th>
+                                <th>Unit</th>
+                                <th>Unit Price</th>
+                                <th>Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bom-body">
+                            <tr><td colspan="5" class="text-center text-base-content/30">No items yet — describe your stage to SpotLite</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex items-center gap-3 mt-2 pt-2 border-t border-base-content/10">
+                    <progress class="progress w-full" id="budget-progress" value="0" max="100"></progress>
+                    <span class="text-xs text-base-content/60 whitespace-nowrap" id="budget-text">Rp 0 / Rp 25,000,000</span>
+                    <button class="btn btn-outline btn-xs" onclick="exportBOM()">Export CSV</button>
+                </div>
             </div>
-            <div class="flex items-center gap-3 mt-2 pt-2 border-t border-base-content/10">
-                <progress class="progress w-full" id="budget-progress" value="0" max="100"></progress>
-                <span class="text-xs text-base-content/60 whitespace-nowrap" id="budget-text">Rp 0 / Rp 25,000,000</span>
-                <button class="btn btn-outline btn-xs" onclick="exportBOM()">Export CSV</button>
+            <!-- Vendor Sourcing Panel -->
+            <div class="bg-base-200 rounded-2xl p-3 flex flex-col overflow-hidden" id="vendor-panel">
+                <div class="text-xs font-semibold text-base-content/50 mb-2">Where to Buy</div>
+                <div class="flex-1 overflow-y-auto flex flex-col gap-2" id="vendor-results-container">
+                    <div class="text-center text-base-content/30 text-sm py-4">Vendor results appear here after BOM is generated</div>
+                </div>
             </div>
         </div>
     </div>

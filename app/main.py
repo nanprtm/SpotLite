@@ -72,12 +72,16 @@ async def websocket_session(ws: WebSocket):
     user_id = "director"
     session_id = str(uuid.uuid4())
 
-    # Send helper for background tasks (image gen)
+    # Send helper for background tasks (image gen, vendor search)
+    ws_closed = {"value": False}
+
     async def send_to_client(msg: dict):
+        if ws_closed["value"]:
+            return
         try:
             await ws.send_json(msg)
-        except Exception as e:
-            logger.error("Failed to send to browser: %s", e)
+        except Exception:
+            ws_closed["value"] = True
 
     # Create ADK session with stage config in state
     base_stage_b64 = base64.b64encode(_load_base_stage()).decode()
@@ -178,6 +182,7 @@ async def websocket_session(ws: WebSocket):
     except Exception as e:
         logger.error("WebSocket error: %s: %s", type(e).__name__, e)
     finally:
+        ws_closed["value"] = True
         live_request_queue.close()
         logger.info("Session %s cleaned up", session_id)
 

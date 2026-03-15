@@ -217,26 +217,24 @@ async def estimate_bom(
             "the director."
         )
 
+    # Auto-trigger vendor search for top 3 items (only once per BOM)
+    if not tool_context.state.get("_vendor_search_active"):
+        tool_context.state["_vendor_search_active"] = True
+        send_fn = tool_context.state.get("_send_to_client")
+        location = tool_context.state.get("stage_config", {}).get("location", "")
+        asyncio.create_task(
+            _auto_vendor_search_background(bom["items"], location, send_fn,
+                                           tool_context.state)
+        )
+
     return result
 
 
-# ── Vendor Search Tool (Google Search grounding via generate_content) ──
+# ── Vendor Search (Google Search grounding via generate_content) ──
 
 
-async def search_vendors(
-    query: str, tool_context: ToolContext
-) -> dict:
-    """Search for local Indonesian vendors and suppliers for stage materials.
-
-    Use this when the director asks where to buy materials, wants price
-    comparisons across stores, or needs vendor recommendations in a
-    specific area.
-
-    Args:
-        query: Search query for finding vendors, e.g. 'harga triplek 9mm
-            Tokopedia' or 'toko bangunan terdekat Jakarta Selatan' or
-            'supplier kain backdrop murah Bandung'.
-    """
+async def _do_vendor_search(query: str) -> dict:
+    """Core vendor search — returns {query, text, sources} or {query, error}."""
     from google import genai
 
     client = genai.Client(
@@ -262,7 +260,6 @@ async def search_vendors(
 
         result_text = response.text if response.text else "Tidak ada hasil."
 
-        # Extract grounding sources
         sources = []
         if response.candidates and response.candidates[0].grounding_metadata:
             gm = response.candidates[0].grounding_metadata
@@ -274,21 +271,109 @@ async def search_vendors(
                             "url": getattr(chunk.web, "uri", ""),
                         })
 
-        # Store for WebSocket handler to pick up
-        tool_context.state["_pending_vendor_results"] = {
-            "query": query,
-            "text": result_text,
-            "sources": sources,
-        }
-
-        return {
-            "status": "success",
-            "results": result_text[:1000],
-            "source_count": len(sources),
-        }
+        return {"query": query, "text": result_text, "sources": sources}
     except Exception as e:
         logger.error("Vendor search failed: %s", e)
-        return {"status": "error", "message": str(e)}
+        return {"query": query, "text": f"Search failed: {e}", "sources": []}
+
+
+async def search_vendors(
+    query: str, tool_context: ToolContext
+) -> dict:
+    """Search for local Indonesian vendors and suppliers for stage materials.
+
+    Use this when the director asks where to buy materials, wants price
+    comparisons across stores, or needs vendor recommendations in a
+    specific area.
+
+    Args:
+        query: Search query for finding vendors, e.g. 'harga triplek 9mm
+            Tokopedia' or 'toko bangunan terdekat Jakarta Selatan' or
+            'supplier kain backdrop murah Bandung'.
+    """
+    result = await _do_vendor_search(query)
+
+    # Store for WebSocket handler to pick up
+    tool_context.state["_pending_vendor_results"] = result
+
+    return {
+        "status": "success",
+        "results": result["text"][:1000],
+        "source_count": len(result["sources"]),
+    }
+
+
+# ── Auto Vendor Search (background, triggered after BOM) ──
+
+
+async def _search_one_vendor(item_name: str, location: str, send_fn):
+    """Search vendors for a single BOM item and send result to client."""
+    loc_part = f" {location}" if location else ""
+    query = f"harga {item_name}{loc_part} Tokopedia Shopee Bukalapak"
+    result = await _do_vendor_search(query)
+    result["item_name"] = item_name
+    if send_fn:
+        await send_fn({"type": "vendor_result", **result})
+
+
+async def _search_thrift_stores(location: str, send_fn):
+    """Search for nearby junkyard/thrift stores for cheap materials."""
+    if not location or not send_fn:
+        return
+    loc_part = f" di {location}"
+    query = (
+        f"toko rongsokan jual beli barang bekas besi tua{loc_part}. "
+        f"Berikan nama toko, alamat, dan link Google Maps. "
+        f"Fokus pada toko yang menjual bahan bangunan bekas, kayu bekas, "
+        f"besi tua, atau barang rongsokan."
+    )
+    result = await _do_vendor_search(query)
+    result["item_name"] = "Toko Rongsokan & Barang Bekas"
+    if send_fn:
+        await send_fn({"type": "thrift_result", **result})
+
+
+async def _auto_vendor_search_background(
+    bom_items: list[dict], location: str, send_fn, state: dict
+):
+    """Fire vendor searches for top 3 BOM items by subtotal."""
+    try:
+        # Sort by subtotal desc, skip zero-cost items
+        ranked = sorted(
+            [i for i in bom_items if i.get("subtotal", 0) > 0],
+            key=lambda x: x["subtotal"],
+            reverse=True,
+        )[:3]
+
+        if not ranked or not send_fn:
+            return
+
+        item_names = [i["name"] for i in ranked]
+
+        # Small delay to avoid hammering API alongside image gen
+        await asyncio.sleep(3)
+
+        # Tell frontend to show loading skeletons
+        await send_fn({"type": "vendor_search_started", "items": item_names})
+
+        # Fire searches sequentially to avoid rate limits
+        for name in item_names:
+            await _search_one_vendor(name, location, send_fn)
+            await asyncio.sleep(1)
+
+        # Search for nearby thrift/junkyard stores
+        logger.info("Thrift search: location=%r", location)
+        if location:
+            await asyncio.sleep(1)
+            await _search_thrift_stores(location, send_fn)
+        else:
+            logger.warning("Skipping thrift search — no location set")
+
+        # Signal completion
+        await send_fn({"type": "vendor_search_complete"})
+    finally:
+        # Allow re-trigger on next BOM generation
+        state.pop("_vendor_search_active", None)
 
 
 # ── Root Agent ──────────────────────────────────────────────────

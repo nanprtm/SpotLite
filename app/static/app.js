@@ -21,14 +21,44 @@ let _pendingUserTranscript = null;
 
 // ============ Setup Screen ============
 
+// Auto-detect city via geolocation on page load
+(function autoDetectLocation() {
+    if (!navigator.geolocation) return;
+    const locationInput = document.getElementById("location");
+    navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+            try {
+                const { latitude, longitude } = pos.coords;
+                const resp = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=id`
+                );
+                const data = await resp.json();
+                const city = data.address?.city || data.address?.town || data.address?.county || data.address?.state || "";
+                if (city && locationInput && !locationInput.value) {
+                    locationInput.value = city;
+                    locationInput.placeholder = "e.g., Jakarta Selatan";
+                }
+            } catch (e) {
+                console.warn("Reverse geocode failed:", e);
+                locationInput.placeholder = "e.g., Jakarta Selatan";
+            }
+        },
+        () => {
+            locationInput.placeholder = "e.g., Jakarta Selatan";
+        },
+        { timeout: 5000 }
+    );
+})();
+
 function startSession() {
     const name = document.getElementById("show-name").value || "Untitled Show";
     const width = parseFloat(document.getElementById("stage-width").value) || 8;
     const depth = parseFloat(document.getElementById("stage-depth").value) || 6;
     const height = parseFloat(document.getElementById("stage-height").value) || 4;
     const budget = parseInt(document.getElementById("budget").value) || 25000000;
+    const location = document.getElementById("location").value || "";
 
-    state.config = { name, width, depth, height, budget };
+    state.config = { name, width, depth, height, budget, location };
 
     document.getElementById("setup-screen").style.display = "none";
     document.getElementById("session-screen").style.display = "grid";
@@ -99,6 +129,18 @@ function handleServerMessage(msg) {
             break;
         case "vendor_results":
             showVendorResults(msg);
+            break;
+        case "vendor_search_started":
+            showVendorSearchStarted(msg);
+            break;
+        case "vendor_result":
+            showVendorResultPanel(msg);
+            break;
+        case "vendor_search_complete":
+            hideVendorSkeletons();
+            break;
+        case "thrift_result":
+            showThriftResult(msg);
             break;
         case "error":
             addTranscript("assistant", "Error: " + msg.message);
@@ -179,6 +221,77 @@ function showVendorResults(msg) {
     card.innerHTML = html;
     log.appendChild(card);
     log.scrollTop = log.scrollHeight;
+}
+
+// ============ Vendor Panel ============
+
+function showVendorSearchStarted(msg) {
+    const container = document.getElementById("vendor-results-container");
+    container.innerHTML = "";
+    for (const itemName of (msg.items || [])) {
+        const skeleton = document.createElement("div");
+        skeleton.className = "vendor-card-panel loading";
+        skeleton.dataset.itemName = itemName;
+        skeleton.innerHTML = `
+            <strong>${itemName}</strong>
+            <div class="skeleton-bar"></div>
+            <div class="skeleton-bar short"></div>
+        `;
+        container.appendChild(skeleton);
+    }
+}
+
+function showVendorResultPanel(msg) {
+    const container = document.getElementById("vendor-results-container");
+    const skeleton = container.querySelector(`[data-item-name="${CSS.escape(msg.item_name)}"]`);
+
+    const card = document.createElement("div");
+    card.className = "vendor-card-panel";
+
+    // Truncate text to ~200 chars for compact display
+    const summary = (msg.text || "").substring(0, 200).replace(/\n+/g, " ");
+    let html = `<strong>${msg.item_name}</strong>`;
+    html += `<p class="vendor-text">${summary}${msg.text?.length > 200 ? "..." : ""}</p>`;
+
+    if (msg.sources?.length) {
+        html += '<div class="vendor-links">';
+        for (const src of msg.sources) {
+            const label = src.title || new URL(src.url).hostname;
+            html += `<a href="${src.url}" target="_blank" rel="noopener">${label}</a>`;
+        }
+        html += "</div>";
+    }
+
+    card.innerHTML = html;
+    if (skeleton) skeleton.replaceWith(card);
+    else container.appendChild(card);
+}
+
+function showThriftResult(msg) {
+    const container = document.getElementById("vendor-results-container");
+    const card = document.createElement("div");
+    card.className = "vendor-card-panel thrift";
+
+    const summary = (msg.text || "").substring(0, 250).replace(/\n+/g, " ");
+    let html = `<strong>Toko Rongsokan & Barang Bekas</strong>`;
+    html += `<p class="vendor-text">${summary}${msg.text?.length > 250 ? "..." : ""}</p>`;
+
+    if (msg.sources?.length) {
+        html += '<div class="vendor-links">';
+        for (const src of msg.sources) {
+            const label = src.title || "Maps";
+            html += `<a href="${src.url}" target="_blank" rel="noopener">${label}</a>`;
+        }
+        html += "</div>";
+    }
+
+    card.innerHTML = html;
+    container.appendChild(card);
+}
+
+function hideVendorSkeletons() {
+    const container = document.getElementById("vendor-results-container");
+    container.querySelectorAll(".vendor-card-panel.loading").forEach((el) => el.remove());
 }
 
 // ============ Audio Capture ============
