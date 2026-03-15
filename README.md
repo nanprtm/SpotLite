@@ -2,7 +2,7 @@
 
 **Voice-powered stage design assistant for Indonesian theater**
 
-Stage Buddy is a web application that helps theater directors design stage sets through real-time voice conversation with an AI set designer. Directors photograph their empty stage, describe their vision aloud, and receive AI-generated mockup images along with an itemized bill of materials using real Indonesian building material prices -- all within a specified budget.
+Stage Buddy is a web application that helps theater directors design stage sets through real-time voice conversation with an AI set designer. Directors describe their vision aloud and receive AI-generated mockup images along with an itemized bill of materials using real Indonesian building material prices — all within a specified budget.
 
 ---
 
@@ -12,7 +12,7 @@ Musical theater in Indonesia faces a massive disconnect between production costs
 
 ## Solution
 
-Stage Buddy is a web app where theater directors photograph an empty stage, then have a real-time voice conversation with Gemini to design the set within a budget. The AI persona "Pak Panggung" (Mr. Stage) acts as a veteran set designer who understands local materials, costs, and creative workarounds. Gemini generates updated stage mockup images and an itemized bill of materials with real Indonesian material prices sourced from juraganmaterial.id. Directors can iterate conversationally -- asking to make things cheaper, swap materials, or redesign sections -- and see both the visual and cost impact in real time.
+Stage Buddy is a web app where theater directors have a real-time voice conversation with Gemini to design their set within a budget. The AI persona "Teman Panggung" (Stage Buddy) acts as an energetic, creative set designer who understands local materials, costs, and creative workarounds. Gemini generates updated stage mockup images and an itemized bill of materials with real Indonesian material prices sourced from juraganmaterial.id. Directors can iterate conversationally — asking to make things cheaper, swap materials, or redesign sections — and see both the visual and cost impact in real time.
 
 ---
 
@@ -36,30 +36,45 @@ Stage Buddy is a web app where theater directors photograph an empty stage, then
 +----------------------------------------------------+
 ```
 
+**Key technical details:**
+
+- **Live API model:** `gemini-live-2.5-flash-native-audio` (GA) for real-time voice streaming
+- **Image model:** `gemini-2.5-flash-image` with 16:9 aspect ratio
+- **Auth:** Vertex AI with Google Cloud credentials (not API key)
+- **Session management:** Live API sessions naturally end after each turn. Context is preserved via conversation history and injected into the system instruction on reconnect, providing seamless continuity.
+- **Image generation:** Runs in background to avoid blocking the Live session. Includes retry with backoff on rate limits and a queue guard to prevent duplicate generations.
+- **Audio playback:** Gapless scheduling via Web Audio API `source.start(nextPlayTime)` for smooth voice output.
+
 **Data flow:**
 
-1. The director opens the app in a browser, enters show details (name, stage dimensions, budget), and starts a session.
+1. The director opens the app, enters show details (name, stage dimensions, budget), and starts a session.
 2. A WebSocket connection is established to the FastAPI backend.
-3. The backend opens a Gemini Live API session with the "Pak Panggung" system prompt and the full materials price list.
-4. The director captures a photo of the empty stage (sent as JPEG over the WebSocket) and speaks into the microphone (streamed as PCM audio).
-5. Gemini processes the voice input and triggers function calls:
-   - `generate_stage_image` -- calls the Gemini image generation model to produce a stage mockup, optionally composited onto the original stage photo.
-   - `generate_bom` -- matches requested materials against the pre-scraped price database using fuzzy matching and returns an itemized cost breakdown.
-6. Results (audio response, generated images, BOM data) are streamed back to the browser over the same WebSocket.
-7. The frontend renders the stage mockup, updates the BOM table, and shows budget utilization on a progress bar.
+3. A placeholder stage image is displayed. The director can optionally capture their real stage via camera.
+4. The director taps the mic and describes what they want on stage.
+5. Teman Panggung repeats back the request to confirm alignment, then generates the visualization.
+6. Gemini triggers function calls:
+   - `generate_stage_image` — calls the Gemini image model to produce a stage mockup based on the placeholder or captured stage photo.
+   - `generate_bom` — matches requested materials against the price database using fuzzy matching and returns an itemized cost breakdown with dimension-aware quantity estimates.
+7. Results (audio response, generated images, BOM data) are streamed back to the browser.
+8. The frontend renders the stage mockup, updates the BOM table, and shows budget utilization on a progress bar.
 
 ---
 
 ## Features
 
-- Real-time voice conversation with "Pak Panggung" (AI set designer persona)
-- Stage photo capture via device camera
-- AI-generated stage mockup images (composited onto the captured stage photo)
+- Real-time voice conversation with "Teman Panggung" (AI set designer persona)
+- AI-generated stage mockup images (16:9, based on placeholder or captured stage photo)
 - Budget-aware bill of materials with real Indonesian material prices
+- Dimension-aware quantity estimation (calculates material needs based on actual stage size)
 - Fuzzy material matching against a 58-item price database
 - Budget tracking with visual progress bar (color-coded warnings)
 - CSV export for the bill of materials
 - Conversational iteration ("make it cheaper", "replace the backdrop", "use bamboo instead")
+- Confirm-before-generate interaction flow (agent repeats back the request before generating)
+- Image generation queue guard (prevents duplicate/overlapping generations)
+- Session continuity across Live API reconnects via conversation history
+- Gapless audio playback for smooth voice output
+- Debug conversation logs in `logs/` directory
 
 ---
 
@@ -67,8 +82,9 @@ Stage Buddy is a web app where theater directors photograph an empty stage, then
 
 | Layer      | Technology                                                        |
 |------------|-------------------------------------------------------------------|
-| Backend    | Python 3.11, FastAPI, uvicorn                                     |
-| AI         | Google GenAI SDK, Gemini Live API (streaming audio), Gemini Image Generation |
+| Backend    | Python 3.11+, FastAPI, uvicorn                                    |
+| AI         | Google GenAI SDK, Gemini Live API (native audio), Gemini Image Generation |
+| Auth       | Vertex AI with Google Cloud Application Default Credentials       |
 | Frontend   | Vanilla HTML, JavaScript, CSS (no frameworks)                     |
 | Data       | Pre-scraped material prices from juraganmaterial.id (58 items)    |
 | Deployment | Docker, Google Cloud Run                                          |
@@ -80,7 +96,8 @@ Stage Buddy is a web app where theater directors photograph an empty stage, then
 ### Prerequisites
 
 - Python 3.11+
-- A Google API key with access to the Gemini API
+- Google Cloud project with billing enabled
+- Google Cloud CLI (`gcloud`)
 
 ### Setup
 
@@ -96,9 +113,15 @@ source venv/bin/activate  # or venv\Scripts\activate on Windows
 # Install dependencies
 pip install -r requirements.txt
 
+# Authenticate with Google Cloud
+gcloud auth application-default login
+
 # Set up environment variables
 cp .env.example .env
-# Edit .env and add your GOOGLE_API_KEY
+# Edit .env with your GCP project ID:
+#   GOOGLE_GENAI_USE_VERTEXAI=true
+#   GOOGLE_CLOUD_PROJECT=your-project-id
+#   GOOGLE_CLOUD_LOCATION=us-central1
 
 # Run locally
 uvicorn app.main:app --reload --port 8080
@@ -110,10 +133,10 @@ uvicorn app.main:app --reload --port 8080
 
 1. Enter your show name, stage dimensions, and budget on the setup screen.
 2. Click "Start Design Session" to connect to the AI.
-3. Use "Capture Stage" to photograph your empty stage with the device camera.
+3. A placeholder stage image is shown. Optionally use "Capture Stage" to photograph your real stage.
 4. Tap the Mic button and describe what you want on stage.
-5. Pak Panggung will respond with voice, generate a stage mockup image, and produce a bill of materials.
-6. Iterate by asking for changes -- the image and BOM update in real time.
+5. Teman Panggung will repeat your request for confirmation, then generate a stage mockup and bill of materials.
+6. Iterate by asking for changes — the image and BOM update in real time.
 7. Export the final BOM as a CSV file.
 
 ---
@@ -122,11 +145,10 @@ uvicorn app.main:app --reload --port 8080
 
 ```bash
 export GCP_PROJECT_ID=your-project-id
-export GOOGLE_API_KEY=your-key
 ./deploy.sh
 ```
 
-The deploy script builds a Docker container, pushes it to Google Container Registry, and deploys to Cloud Run with the API key set as an environment variable. The service is configured with 512Mi memory and a 300-second timeout to accommodate long voice sessions.
+The deploy script builds a Docker container, pushes it to Google Container Registry, and deploys to Cloud Run. The service is configured with 512Mi memory and a 300-second timeout to accommodate long voice sessions.
 
 ---
 
@@ -147,14 +169,16 @@ stage-buddy/
   app/
     main.py              # FastAPI app, WebSocket endpoint, routes
     gemini_session.py    # Gemini Live session manager with function calling
-    prompts.py           # System prompt for the Pak Panggung persona
+    prompts.py           # System prompt for the Teman Panggung persona
     prices.py            # Price database loader and BOM generator
     static/
       index.html         # Single-page frontend
       app.js             # WebSocket client, audio capture/playback, UI logic
-      style.css           # Styles
+      style.css          # Styles
+      stage.png          # Placeholder empty stage image
   data/
     materials.json       # Pre-scraped material prices (58 items)
+  logs/                  # Debug conversation logs (gitignored)
   scripts/
     scrape_prices.py     # Price scraping/population script
   tests/
@@ -172,12 +196,6 @@ stage-buddy/
 - **Track:** Live Agents
 - **Challenge:** Gemini Live Agent Challenge
 - **Required technologies:** Gemini model, Google GenAI SDK, Google Cloud Run
-
----
-
-## Team
-
-- [Team member names here]
 
 ---
 

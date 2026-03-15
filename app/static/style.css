@@ -70,6 +70,7 @@ body {
 
 .form-row .form-group {
     flex: 1;
+    min-width: 0;
 }
 
 .btn-primary {
@@ -138,9 +139,11 @@ body {
 
 .conversation-panel {
     width: 360px;
+    min-width: 300px;
     display: flex;
     flex-direction: column;
     padding: 1rem;
+    overflow: hidden;
 }
 
 .voice-status {
@@ -172,6 +175,8 @@ body {
     border-radius: 8px;
     font-size: 0.9rem;
     max-width: 90%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 .transcript-entry.user {
@@ -207,6 +212,67 @@ body {
 .btn-mic.active {
     background: #ea4335;
     border-color: #ea4335;
+    animation: mic-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(234, 67, 53, 0.4); }
+    50% { box-shadow: 0 0 0 12px rgba(234, 67, 53, 0); }
+}
+
+/* Voice Indicator */
+.voice-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 40px;
+    margin-bottom: 0.3rem;
+}
+
+.waveform-bar {
+    width: 4px;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    transition: background 0.3s;
+}
+
+/* Listening state — red bars bouncing */
+.voice-indicator.listening .waveform-bar {
+    background: #ea4335;
+    animation: wave-listen 0.8s ease-in-out infinite alternate;
+}
+.voice-indicator.listening .waveform-bar:nth-child(1) { animation-delay: 0s; }
+.voice-indicator.listening .waveform-bar:nth-child(2) { animation-delay: 0.15s; }
+.voice-indicator.listening .waveform-bar:nth-child(3) { animation-delay: 0.3s; }
+.voice-indicator.listening .waveform-bar:nth-child(4) { animation-delay: 0.15s; }
+.voice-indicator.listening .waveform-bar:nth-child(5) { animation-delay: 0s; }
+
+@keyframes wave-listen {
+    0% { height: 4px; }
+    100% { height: 20px; }
+}
+
+/* Speaking state — blue bars, taller, smoother */
+.voice-indicator.speaking .waveform-bar {
+    background: #4285f4;
+    animation: wave-speak 0.6s ease-in-out infinite alternate;
+}
+.voice-indicator.speaking .waveform-bar:nth-child(1) { animation-delay: 0s; }
+.voice-indicator.speaking .waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+.voice-indicator.speaking .waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+.voice-indicator.speaking .waveform-bar:nth-child(4) { animation-delay: 0.1s; }
+.voice-indicator.speaking .waveform-bar:nth-child(5) { animation-delay: 0s; }
+
+@keyframes wave-speak {
+    0% { height: 4px; }
+    100% { height: 28px; }
+}
+
+/* Smooth transition on status text */
+.voice-status {
+    transition: color 0.3s ease;
 }
 
 .btn-capture {
@@ -221,6 +287,12 @@ body {
 
 .btn-capture:hover {
     background: #2a2a2a;
+}
+
+.stage-hint {
+    font-size: 0.8rem;
+    color: #888;
+    flex: 1;
 }
 
 /* BOM Panel */

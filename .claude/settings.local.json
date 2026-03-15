@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:geminiliveagentchallenge.devpost.com)",
+      "WebFetch(domain:juraganmaterial.id)",
+      "WebFetch(domain:ai.google.dev)",
+      "mcp__claude_ai_Context7__resolve-library-id",
+      "mcp__claude_ai_Context7__query-docs"
+    ]
+  }
+}

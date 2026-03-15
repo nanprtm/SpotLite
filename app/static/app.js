@@ -4,6 +4,7 @@ const state = {
     ws: null,
     config: null,
     audioContext: null,
+    playbackContext: null,
     micStream: null,
     micProcessor: null,
     isRecording: false,
@@ -25,6 +26,8 @@ function startSession() {
 
     document.getElementById("setup-screen").style.display = "none";
     document.getElementById("session-screen").style.display = "flex";
+    document.getElementById("budget-text").textContent =
+        `Rp 0 / Rp ${budget.toLocaleString("id-ID")}`;
 
     connectWebSocket();
 }
@@ -45,6 +48,9 @@ function connectWebSocket() {
 
     state.ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
+        if (msg.type !== "audio") {
+            console.log("WS msg:", msg.type, msg);
+        }
         handleServerMessage(msg);
     };
 
@@ -63,7 +69,8 @@ function connectWebSocket() {
 function handleServerMessage(msg) {
     switch (msg.type) {
         case "session_started":
-            updateVoiceStatus("Ready — tap mic to speak");
+            updateVoiceStatus("Ready — tap mic to start talking");
+            showBaseStagePlaceholder();
             break;
         case "audio":
             playAudioChunk(msg.data);
@@ -102,7 +109,7 @@ async function toggleMic() {
         state.micProcessor = state.audioContext.createScriptProcessor(4096, 1, 1);
 
         state.micProcessor.onaudioprocess = (e) => {
-            if (!state.isRecording || !state.ws) return;
+            if (!state.isRecording || !state.ws || state.ws.readyState !== 1) return;
             const float32 = e.inputBuffer.getChannelData(0);
             const int16 = float32ToInt16(float32);
             const b64 = arrayBufferToBase64(int16.buffer);
@@ -116,13 +123,14 @@ async function toggleMic() {
         btn.classList.add("active");
         updateVoiceStatus("Listening...");
     } else {
+        // Mute — stop sending audio but keep everything alive
         state.isRecording = false;
         if (state.micProcessor) {
             state.micProcessor.disconnect();
             state.micProcessor = null;
         }
         btn.classList.remove("active");
-        updateVoiceStatus("Ready — tap mic to speak");
+        updateVoiceStatus("Mic muted — tap to unmute");
     }
 }
 
@@ -137,39 +145,58 @@ function float32ToInt16(float32Array) {
 
 // ============ Audio Playback ============
 
-const audioPlaybackQueue = [];
-let isPlaying = false;
+let nextPlayTime = 0;
+let playbackEndTimer = null;
 
-async function playAudioChunk(b64Data) {
+function playAudioChunk(b64Data) {
     const bytes = base64ToArrayBuffer(b64Data);
-    audioPlaybackQueue.push(bytes);
-    if (!isPlaying) drainAudioQueue();
-}
 
-async function drainAudioQueue() {
-    isPlaying = true;
-    updateVoiceStatus("Pak Panggung is speaking...");
+    if (!state.playbackContext) {
+        state.playbackContext = new AudioContext({ sampleRate: 24000 });
+    }
+    const ctx = state.playbackContext;
 
-    const ctx = state.audioContext || new AudioContext({ sampleRate: 24000 });
-
-    while (audioPlaybackQueue.length > 0) {
-        const pcmBytes = audioPlaybackQueue.shift();
-        const int16 = new Int16Array(pcmBytes);
-        const float32 = new Float32Array(int16.length);
-        for (let i = 0; i < int16.length; i++) {
-            float32[i] = int16[i] / 0x7fff;
-        }
-        const buffer = ctx.createBuffer(1, float32.length, 24000);
-        buffer.getChannelData(0).set(float32);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start();
-        await new Promise((r) => (source.onended = r));
+    const int16 = new Int16Array(bytes);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+        float32[i] = int16[i] / 0x7fff;
     }
 
-    isPlaying = false;
-    updateVoiceStatus("Ready — tap mic to speak");
+    const buffer = ctx.createBuffer(1, float32.length, 24000);
+    buffer.getChannelData(0).set(float32);
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+
+    // Schedule gapless: each chunk starts exactly where the previous one ends
+    const now = ctx.currentTime;
+    if (nextPlayTime < now) {
+        nextPlayTime = now;
+    }
+    source.start(nextPlayTime);
+
+    // Show speaking status on first chunk
+    if (nextPlayTime <= now) {
+        if (state.isRecording) {
+            updateVoiceStatus("Teman Panggung is speaking... (listening)");
+        } else {
+            updateVoiceStatus("Teman Panggung is speaking...");
+        }
+    }
+
+    nextPlayTime += buffer.duration;
+
+    // Reset status after the last scheduled chunk finishes
+    clearTimeout(playbackEndTimer);
+    const remaining = nextPlayTime - ctx.currentTime;
+    playbackEndTimer = setTimeout(() => {
+        if (state.isRecording) {
+            updateVoiceStatus("Listening...");
+        } else {
+            updateVoiceStatus("Mic muted — tap to unmute");
+        }
+    }, remaining * 1000 + 50);
 }
 
 // ============ Camera ============
@@ -212,10 +239,18 @@ async function captureStage() {
 
 function updateVoiceStatus(text) {
     const el = document.getElementById("voice-status");
+    const indicator = document.getElementById("voice-indicator");
     el.textContent = text;
     el.className = "voice-status";
-    if (text.includes("Listening")) el.classList.add("listening");
-    if (text.includes("speaking")) el.classList.add("speaking");
+    indicator.className = "voice-indicator";
+
+    if (text.includes("Listening")) {
+        el.classList.add("listening");
+        indicator.classList.add("listening");
+    } else if (text.includes("speaking")) {
+        el.classList.add("speaking");
+        indicator.classList.add("speaking");
+    }
 }
 
 function addTranscript(role, text) {
@@ -227,32 +262,43 @@ function addTranscript(role, text) {
     log.scrollTop = log.scrollHeight;
 }
 
+function showBaseStagePlaceholder() {
+    const container = document.getElementById("stage-image-container");
+    container.innerHTML = `<img src="/static/stage.png" alt="Placeholder stage">`;
+}
+
 function showStageImage(b64, mimeType) {
     const container = document.getElementById("stage-image-container");
     container.innerHTML = `<img src="data:${mimeType || "image/png"};base64,${b64}" alt="Stage design">`;
 }
 
 function updateBOM(data) {
-    state.bomItems = data.items;
-    state.bomTotal = data.total;
-    state.bomBudget = data.budget;
+    console.log("updateBOM called:", data);
+    state.bomItems = data.items || [];
+    state.bomTotal = data.total || 0;
+    state.bomBudget = data.budget || state.config.budget;
 
     const tbody = document.getElementById("bom-body");
     tbody.innerHTML = "";
 
-    for (const item of data.items) {
+    if (state.bomItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#555; text-align:center;">No matching materials found</td></tr>';
+        return;
+    }
+
+    for (const item of state.bomItems) {
         const tr = document.createElement("tr");
         tr.innerHTML = `
             <td>${item.name}</td>
             <td class="number">${item.quantity}</td>
-            <td>${item.unit}</td>
-            <td class="number">Rp ${item.unit_price.toLocaleString("id-ID")}</td>
-            <td class="number">Rp ${item.subtotal.toLocaleString("id-ID")}</td>
+            <td>${item.unit || "-"}</td>
+            <td class="number">Rp ${(item.unit_price || 0).toLocaleString("id-ID")}</td>
+            <td class="number">Rp ${(item.subtotal || 0).toLocaleString("id-ID")}</td>
         `;
         tbody.appendChild(tr);
     }
 
-    const pct = Math.min((data.total / data.budget) * 100, 100);
+    const pct = Math.min((state.bomTotal / state.bomBudget) * 100, 100);
     const fill = document.getElementById("budget-fill");
     fill.style.width = pct + "%";
     fill.className = "budget-fill";
@@ -260,7 +306,7 @@ function updateBOM(data) {
     else if (pct > 70) fill.classList.add("warning");
 
     document.getElementById("budget-text").textContent =
-        `Rp ${data.total.toLocaleString("id-ID")} / Rp ${data.budget.toLocaleString("id-ID")}`;
+        `Rp ${state.bomTotal.toLocaleString("id-ID")} / Rp ${state.bomBudget.toLocaleString("id-ID")}`;
 }
 
 function exportBOM() {

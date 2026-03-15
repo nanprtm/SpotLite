@@ -43,6 +43,9 @@ def generate_bom(items: list[dict], budget: int) -> dict:
     total = 0
 
     for item in items:
+        # Handle both {"name": "x", "quantity": 1} and plain string "x"
+        if isinstance(item, str):
+            item = {"name": item, "quantity": 1}
         material = find_material(item["name"])
         if material:
             unit_price = material["price_idr"]
