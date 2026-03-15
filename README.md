@@ -8,7 +8,7 @@ SpotLite is a web application that helps theater directors design stage sets thr
 
 ## Problem Statement
 
-Musical theater in Indonesia faces a massive disconnect between production costs and market demand. Student communities and indie productions often go bankrupt ("boncos") because the vendor ecosystem is monopolized by high-priced concert prop makers. Directors lack tools to plan sets within budget and have no data to negotiate fair prices with vendors. There is no accessible way to visualize a design, estimate costs, and source materials simultaneously.
+Musical theater in Indonesia has a dirty secret: student productions and indie shows regularly go bankrupt ("boncos"). They want to build something extravagant, but only have limited knowledge to materials recommended by word of mouth, something that is often beyond their budget. They sketch on paper, call vendors for quotes, get sticker shock, and either blow their budget or water down their vision. We wanted to give them a tool that feels like brainstorming with a brilliant, budget-savvy friend — not filling out spreadsheets.
 
 ## Solution
 
