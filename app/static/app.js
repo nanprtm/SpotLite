@@ -31,7 +31,7 @@ function startSession() {
     state.config = { name, width, depth, height, budget };
 
     document.getElementById("setup-screen").style.display = "none";
-    document.getElementById("session-screen").style.display = "flex";
+    document.getElementById("session-screen").style.display = "grid";
     document.getElementById("budget-text").textContent =
         `Rp 0 / Rp ${budget.toLocaleString("id-ID")}`;
 
