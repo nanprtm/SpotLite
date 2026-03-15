@@ -125,7 +125,7 @@
 }
 
 .transcript-entry.assistant {
-    background: var(--color-base-200);
+    background: color-mix(in oklch, var(--color-success) 10%, transparent);
     align-self: flex-start;
 }
 
