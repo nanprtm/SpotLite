@@ -156,12 +156,22 @@ uvicorn app.main:app --reload --port 8080
 
 ## Deploy to Cloud Run
 
+**Manual deploy:**
 ```bash
 export GCP_PROJECT_ID=your-project-id
 ./deploy.sh
 ```
 
-The deploy script builds a Docker container, pushes it to Google Container Registry, and deploys to Cloud Run with 1Gi memory, 900-second timeout, and session affinity for WebSocket support.
+**Auto-deploy via GitHub:**
+Push to `main` triggers Cloud Build automatically via `cloudbuild.yaml`. Set up the trigger with:
+```bash
+gcloud builds triggers create github --name=spotlite-deploy \
+    --repository="projects/YOUR_PROJECT/locations/us-central1/connections/github-connection/repositories/spotlite-repo" \
+    --branch-pattern="^main$" --build-config="cloudbuild.yaml" \
+    --region=us-central1 --project=YOUR_PROJECT
+```
+
+The service runs on Cloud Run with 1Gi memory, 900-second timeout, and session affinity for WebSocket support.
 
 ---
 
@@ -192,7 +202,8 @@ spotlite/
   data/
     materials.json       # Pre-scraped material prices (58 items)
   Dockerfile             # Container build for Cloud Run
-  deploy.sh              # One-command Cloud Run deployment
+  cloudbuild.yaml        # CI/CD — auto-deploy on push to main
+  deploy.sh              # One-command manual Cloud Run deployment
   requirements.txt       # Python dependencies
   .env.example           # Environment variable template
 ```
