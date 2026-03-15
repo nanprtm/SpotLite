@@ -72,6 +72,13 @@ async def websocket_session(ws: WebSocket):
     user_id = "director"
     session_id = str(uuid.uuid4())
 
+    # Send helper for background tasks (image gen)
+    async def send_to_client(msg: dict):
+        try:
+            await ws.send_json(msg)
+        except Exception as e:
+            logger.error("Failed to send to browser: %s", e)
+
     # Create ADK session with stage config in state
     base_stage_b64 = base64.b64encode(_load_base_stage()).decode()
     session = await session_service.create_session(
@@ -82,6 +89,7 @@ async def websocket_session(ws: WebSocket):
             "budget": config.get("budget", 25_000_000),
             "stage_config": config,
             "base_stage_b64": base_stage_b64,
+            "_send_to_client": send_to_client,
         },
     )
 
@@ -182,19 +190,6 @@ async def _route_event(ws: WebSocket, event, user_id: str, session_id: str):
         app_name=APP_NAME, user_id=user_id, session_id=session_id
     )
     if adk_session:
-        pending_image = adk_session.state.pop("_pending_image", None)
-        if pending_image:
-            await ws.send_json({
-                "type": "stage_image",
-                "data": pending_image["data"],
-                "mime_type": pending_image["mime_type"],
-            })
-            await ws.send_json({
-                "type": "transcript",
-                "role": "assistant",
-                "text": "Stage visualization ready!",
-            })
-
         pending_bom = adk_session.state.pop("_pending_bom", None)
         if pending_bom:
             await ws.send_json({
@@ -203,6 +198,15 @@ async def _route_event(ws: WebSocket, event, user_id: str, session_id: str):
                 "total": pending_bom["total"],
                 "budget": pending_bom["budget"],
                 "remaining": pending_bom["remaining"],
+            })
+
+        pending_vendor = adk_session.state.pop("_pending_vendor_results", None)
+        if pending_vendor:
+            await ws.send_json({
+                "type": "vendor_results",
+                "query": pending_vendor.get("query", ""),
+                "text": pending_vendor.get("text", ""),
+                "sources": pending_vendor.get("sources", []),
             })
 
     # Input transcription (what the user said)
@@ -223,24 +227,6 @@ async def _route_event(ws: WebSocket, event, user_id: str, session_id: str):
         })
         return
 
-    # Grounding metadata from vendor search sub-agent
-    if event.grounding_metadata:
-        sources = []
-        if event.grounding_metadata.grounding_chunks:
-            for chunk in event.grounding_metadata.grounding_chunks[:5]:
-                if hasattr(chunk, "web") and chunk.web:
-                    sources.append({
-                        "title": getattr(chunk.web, "title", ""),
-                        "url": getattr(chunk.web, "uri", ""),
-                    })
-        if sources:
-            await ws.send_json({
-                "type": "vendor_results",
-                "query": "",
-                "text": "",
-                "sources": sources,
-            })
-
     if not event.content or not event.content.parts:
         return
 
@@ -249,15 +235,6 @@ async def _route_event(ws: WebSocket, event, user_id: str, session_id: str):
         if part.inline_data and part.inline_data.mime_type and "audio" in part.inline_data.mime_type:
             audio_b64 = base64.b64encode(part.inline_data.data).decode()
             await ws.send_json({"type": "audio", "data": audio_b64})
-
-        # Text response from sub-agent (vendor search results)
-        elif part.text and event.author == "vendor_search":
-            await ws.send_json({
-                "type": "vendor_results",
-                "query": "",
-                "text": part.text,
-                "sources": [],
-            })
 
         # Text response (assistant)
         elif part.text and event.author != "user":
