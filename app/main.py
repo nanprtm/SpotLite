@@ -220,10 +220,11 @@ async def _route_event(ws: WebSocket, event, user_id: str, session_id: str):
 
     # Output transcription (text version of assistant audio)
     if event.output_transcription and event.output_transcription.text:
+        finished = getattr(event.output_transcription, "finished", False)
         await ws.send_json({
-            "type": "transcript",
-            "role": "assistant",
+            "type": "assistant_transcript",
             "text": event.output_transcription.text,
+            "finished": finished,
         })
         return
 

@@ -88,6 +88,9 @@ function handleServerMessage(msg) {
         case "user_transcript":
             handleUserTranscript(msg.text, msg.finished);
             break;
+        case "assistant_transcript":
+            handleAssistantTranscript(msg.text, msg.finished);
+            break;
         case "stage_image":
             showStageImage(msg.data, msg.mime_type);
             break;
@@ -124,6 +127,32 @@ function handleUserTranscript(text, finished) {
             _pendingUserTranscript = null;
         } else {
             addTranscript("user", text);
+        }
+    }
+    log.scrollTop = log.scrollHeight;
+}
+
+// ============ Assistant Transcription ============
+
+let _pendingAssistantTranscript = null;
+
+function handleAssistantTranscript(text, finished) {
+    const log = document.getElementById("transcript-log");
+
+    if (!finished) {
+        if (!_pendingAssistantTranscript) {
+            _pendingAssistantTranscript = document.createElement("div");
+            _pendingAssistantTranscript.className = "transcript-entry assistant partial";
+            log.appendChild(_pendingAssistantTranscript);
+        }
+        _pendingAssistantTranscript.textContent = text;
+    } else {
+        if (_pendingAssistantTranscript) {
+            _pendingAssistantTranscript.textContent = text;
+            _pendingAssistantTranscript.classList.remove("partial");
+            _pendingAssistantTranscript = null;
+        } else {
+            addTranscript("assistant", text);
         }
     }
     log.scrollTop = log.scrollHeight;

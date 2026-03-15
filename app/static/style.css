@@ -129,7 +129,7 @@
     align-self: flex-start;
 }
 
-.transcript-entry.user.partial {
+.transcript-entry.partial {
     opacity: 0.6;
     font-style: italic;
 }
