@@ -185,7 +185,8 @@ async def estimate_bom(
     """Generate a bill of materials with real local prices for the stage set.
 
     Call this after generating a stage image to show the director the cost
-    breakdown.
+    breakdown. Quantities will be auto-corrected if they are too low for
+    the stage dimensions — you will be told about any corrections.
 
     Args:
         items: List of materials needed. Each item is a dict with 'name'
@@ -193,18 +194,30 @@ async def estimate_bom(
             'Pipa PVC 3/4 inch') and 'quantity' (int, number of units needed).
     """
     budget = tool_context.state.get("budget", 25_000_000)
-    bom = _generate_bom(items, budget)
+    stage_config = tool_context.state.get("stage_config", {})
+    bom = _generate_bom(items, budget, stage_dims=stage_config)
 
     # Store in session state for the WebSocket handler to pick up
     tool_context.state["_pending_bom"] = bom
 
-    return {
+    result = {
         "status": "success",
         "total_cost": f"Rp {bom['total']:,}",
         "budget_remaining": f"Rp {bom['remaining']:,}",
         "within_budget": bom["remaining"] >= 0,
         "item_count": len(bom["items"]),
     }
+
+    # Tell Gemini about auto-corrections so it can mention them
+    if bom.get("corrections"):
+        result["quantity_corrections"] = bom["corrections"]
+        result["note"] = (
+            "Some quantities were auto-corrected because they were too low "
+            "for the stage dimensions. Mention the corrected quantities to "
+            "the director."
+        )
+
+    return result
 
 
 # ── Vendor Search Tool (Google Search grounding via generate_content) ──
