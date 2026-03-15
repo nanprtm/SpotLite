@@ -7,7 +7,7 @@
   --color-base-200: oklch(18.522% 0.007 17.911);
   --color-base-300: oklch(16.203% 0.007 17.911);
   --color-base-content: oklch(83.768% 0.001 17.911);
-  --color-primary: oklch(68.628% 0.185 148.958);
+  --color-primary: oklch(80.23% 0.15956 110.722);
   --color-primary-content: oklch(0% 0 0);
   --color-secondary: oklch(69.776% 0.135 168.327);
   --color-secondary-content: oklch(13.955% 0.027 168.327);
@@ -134,12 +134,13 @@
     font-style: italic;
 }
 
-/* Image history thumbnails */
+/* Image history thumbnails (vertical stack in bento) */
 .image-history:empty { display: none; }
 
 .image-history img {
+    width: 80px;
     height: 56px;
-    border-radius: 0.375rem;
+    border-radius: 0.5rem;
     border: 2px solid transparent;
     cursor: pointer;
     object-fit: cover;

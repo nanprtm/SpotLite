@@ -47,24 +47,25 @@
     </div>
 </div>
 
-<!-- Session Screen -->
-<div id="session-screen" class="hidden h-screen flex-col">
-    <div class="flex flex-1 overflow-hidden">
-        <!-- Stage View -->
-        <div class="flex-1 flex flex-col p-3 border-r border-base-content/10">
-            <div class="stage-image-container flex-1 flex items-center justify-center bg-base-200 rounded-xl overflow-hidden relative" id="stage-image-container">
-                <div class="text-base-content/30 text-center">
-                    <p>Capture your stage to begin</p>
-                </div>
-            </div>
-            <div class="image-history flex gap-1.5 py-1.5 overflow-x-auto" id="image-history"></div>
-            <div class="flex gap-2 mt-1">
-                <button class="btn btn-outline btn-sm flex-1" onclick="captureStage()">Capture Stage</button>
+<!-- Session Screen — Bento Grid -->
+<div id="session-screen" class="hidden h-screen p-3 gap-3 grid grid-cols-3 grid-rows-2">
+
+    <!-- Top-Left: Stage Image + History (col-span-2) -->
+    <div class="col-span-2 row-span-1 bg-base-200 rounded-2xl p-3 flex flex-row gap-3 overflow-hidden">
+        <!-- Main image -->
+        <div class="stage-image-container flex-1 flex items-center justify-center bg-base-300 rounded-xl overflow-hidden relative" id="stage-image-container">
+            <div class="text-base-content/30 text-center">
+                <p>Capture your stage to begin</p>
             </div>
         </div>
+        <!-- History thumbnails (vertical stack) -->
+        <div class="image-history flex flex-col gap-2 overflow-y-auto" id="image-history"></div>
+    </div>
 
-        <!-- Conversation Panel -->
-        <div class="w-[360px] min-w-[300px] flex flex-col p-3 overflow-hidden">
+    <!-- Top-Right: Chat Panel (row-span-2, full height) -->
+    <div class="row-span-2 bg-base-200 rounded-2xl flex flex-col overflow-hidden">
+        <!-- Waveform + status -->
+        <div class="px-3 pt-3">
             <div class="voice-indicator flex flex-row items-center justify-center gap-1 h-10 mb-1" id="voice-indicator">
                 <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
                 <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
@@ -73,17 +74,26 @@
                 <div class="waveform-bar w-1 h-1 bg-base-content/20 rounded-sm"></div>
             </div>
             <div class="voice-status text-center py-1 text-sm text-base-content/50" id="voice-status">Connecting...</div>
-            <div class="transcript-log flex-1 overflow-y-auto p-2 flex flex-col gap-2" id="transcript-log"></div>
-            <div class="flex justify-center py-2">
-                <button class="btn-mic w-16 h-16 rounded-full border-2 border-base-content/20 bg-base-200 text-base-content text-2xl cursor-pointer flex items-center justify-center" id="btn-mic" onclick="toggleMic()">Mic</button>
-            </div>
+        </div>
+
+        <!-- Transcript -->
+        <div class="transcript-log flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2" id="transcript-log"></div>
+
+        <!-- Camera + Mic buttons -->
+        <div class="flex justify-center items-center gap-4 p-3">
+            <button class="btn btn-circle btn-outline btn-sm" onclick="captureStage()" title="Capture Stage">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </button>
+            <button class="btn-mic w-14 h-14 rounded-full border-2 border-base-content/20 bg-base-300 text-base-content text-xl cursor-pointer flex items-center justify-center" id="btn-mic" onclick="toggleMic()" title="Toggle Microphone">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
         </div>
     </div>
 
-    <!-- BOM Panel -->
-    <div class="border-t border-base-content/10 p-3 max-h-[35vh] overflow-y-auto">
+    <!-- Bottom-Left: BOM Table (col-span-2) -->
+    <div class="col-span-2 row-span-1 bg-base-200 rounded-2xl p-3 flex flex-col overflow-hidden">
         <h3 class="font-semibold text-sm mb-2">Bill of Materials</h3>
-        <div class="overflow-x-auto">
+        <div class="flex-1 overflow-y-auto">
             <table class="table table-xs table-zebra">
                 <thead>
                     <tr>
@@ -99,12 +109,13 @@
                 </tbody>
             </table>
         </div>
-        <div class="flex items-center gap-3 mt-3">
+        <div class="flex items-center gap-3 mt-2 pt-2 border-t border-base-content/10">
             <progress class="progress w-full" id="budget-progress" value="0" max="100"></progress>
             <span class="text-xs text-base-content/60 whitespace-nowrap" id="budget-text">Rp 0 / Rp 25,000,000</span>
             <button class="btn btn-outline btn-xs" onclick="exportBOM()">Export CSV</button>
         </div>
     </div>
+
 </div>
 
 <video id="camera-preview" playsinline class="hidden"></video>
