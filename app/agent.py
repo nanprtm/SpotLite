@@ -1,4 +1,4 @@
-"""ADK Agent definition for SpotLite — Teman Panggung."""
+"""ADK Agent definition for SpotLite."""
 
 import asyncio
 import base64
@@ -291,7 +291,7 @@ _default_config = {
 _default_instruction = build_system_instruction(_default_config, _materials_summary())
 
 root_agent = Agent(
-    name="teman_panggung",
+    name="spotlite",
     model=LIVE_MODEL,
     instruction=_default_instruction,
     tools=[generate_stage_image, estimate_bom, search_vendors],

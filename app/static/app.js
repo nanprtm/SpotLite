@@ -238,9 +238,9 @@ function playAudioChunk(b64Data) {
 
     if (nextPlayTime <= now) {
         if (state.isRecording) {
-            updateVoiceStatus("Teman Panggung is speaking... (listening)");
+            updateVoiceStatus("SpotLite is speaking... (listening)");
         } else {
-            updateVoiceStatus("Teman Panggung is speaking...");
+            updateVoiceStatus("SpotLite is speaking...");
         }
     }
 
