@@ -8,3 +8,4 @@ dist/
 build/
 logs/
 .claude/
+docs/plans/
